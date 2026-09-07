@@ -8,9 +8,18 @@ const firstXAddr = (raw: unknown): string | null => {
   return text.trim().split(/\s+/).filter(Boolean)[0] ?? null
 }
 
+/**
+ * ONVIF 카메라만 남긴다.
+ *
+ * WS-Discovery 는 ONVIF 전용 프로토콜이 아니다. 같은 멀티캐스트 주소에 윈도우 PC나
+ * 프린터도 응답하므로, Types 에 NetworkVideoTransmitter 가 있는 것만 카메라로 본다.
+ */
+const isVideoTransmitter = (types: unknown): boolean =>
+  /NetworkVideoTransmitter/i.test(Array.isArray(types) ? types.join(' ') : String(types ?? ''))
+
 const toCamera = (match: Record<string, any> | null | undefined): DiscoveredCamera | null => {
   const xaddr = firstXAddr(match?.XAddrs)
-  if (!xaddr) return null
+  if (!xaddr || !isVideoTransmitter(match?.types)) return null
   const url = (() => {
     try {
       return new URL(xaddr)
