@@ -123,12 +123,12 @@ export const makeHarness = (
 }
 
 export const waitFor = async (
-  predicate: () => boolean,
+  predicate: () => boolean | Promise<boolean>,
   { timeoutMs = 3000, stepMs = 5 } = {},
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    if (predicate()) return
+    if (await predicate()) return
     await new Promise((resolve) => setTimeout(resolve, stepMs))
   }
   throw new Error('조건이 시간 안에 만족되지 않았습니다')

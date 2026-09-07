@@ -11,7 +11,10 @@
     "ui": "vite --config vite.ui.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:e2e": "vitest run tests/e2e",
+    "fake-camera": "vite-node tools/fake-camera/cli.ts"
   },
   "dependencies": {
     "ffmpeg-static": "^5.2.0",
