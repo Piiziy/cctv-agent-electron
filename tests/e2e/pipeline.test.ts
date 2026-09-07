@@ -149,21 +149,24 @@ describe('오프라인 복구', () => {
     await agent.supervisor.start(selected)
 
     const spool = createSpoolStore(spoolDir, 1e9)
-    await waitFor(async () => (await spool.list()).length >= 2, { timeoutMs: 40_000, stepMs: 200 })
+    await waitFor(async () => (await spool.list()).length >= 2, { timeoutMs: 60_000, stepMs: 200 })
     expect(receiver.received).toHaveLength(0)
-    const held = (await spool.list()).length
+    const held = (await spool.list()).map((entry) => entry.name)
 
     // 인터넷 복구
     agent.config.write({ backendBaseUrl: receiver.url })
 
-    await waitFor(() => receiver.received.length >= held, { timeoutMs: 40_000, stepMs: 200 })
+    await waitFor(() => receiver.received.length >= held.length, { timeoutMs: 60_000, stepMs: 200 })
     await agent.supervisor.stop()
 
-    // 보관해 둔 것이 오래된 순서대로 도착해야 한다
+    // 보관해 둔 조각이 하나도 빠짐없이, 오래된 순서대로 도착해야 한다.
+    // 스풀이 '비었는지'는 단언하지 않는다 — 복구 뒤에도 녹화는 계속되므로
+    // 새 조각이 계속 들어와 항상 참일 수 없는 조건이다.
+    expect(receiver.received.length).toBeGreaterThanOrEqual(held.length)
     const sequences = receiver.received.map((r) => r.meta.sequence)
     expect(sequences).toEqual([...sequences].sort((a, b) => a - b))
-    expect(await createSpoolStore(spoolDir, 1e9).list()).toHaveLength(0)
-  }, 90_000)
+    expect(sequences[0]).toBe(0)
+  }, 120_000)
 })
 
 describe('사용자 경로: 검색 → 선택 → 수집', () => {

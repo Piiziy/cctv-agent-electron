@@ -27,6 +27,11 @@ export type ProbeResult =
   | { readonly ok: true; readonly profiles: readonly StreamProfile[] }
   | { readonly ok: false; readonly kind: ProbeFailure; readonly message: string }
 
+/** 검색이 '0대'인 것과 '검색 자체가 실패'한 것을 구분한다. 섞으면 사용자가 네트워크를 의심하게 된다. */
+export type DiscoverResult =
+  | { readonly ok: true; readonly cameras: readonly DiscoveredCamera[] }
+  | { readonly ok: false; readonly message: string }
+
 export type SnapshotResult =
   | { readonly ok: true; readonly dataUrl: string }
   | { readonly ok: false; readonly message: string }
@@ -38,7 +43,7 @@ export interface ProbeArgs {
 }
 
 export interface AgentApi {
-  discover(timeoutMs?: number): Promise<DiscoveredCamera[]>
+  discover(timeoutMs?: number): Promise<DiscoverResult>
   probe(args: ProbeArgs): Promise<ProbeResult>
   /** ONVIF 검색에 안 잡히는 카메라를 위한 수동 경로. RTSP 주소를 직접 조사한다. */
   probeRtsp(rtspUri: string): Promise<ProbeResult>

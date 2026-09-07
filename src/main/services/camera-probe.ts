@@ -1,3 +1,4 @@
+import { loadOnvif } from '../lib/onvif-module'
 import type {
   DiscoveredCamera,
   ProbedCamera,
@@ -144,7 +145,7 @@ export const toRawProfile = (profile: unknown): RawProfile | null => {
 }
 
 export const probeCamera = async (args: ProbeArgs): Promise<ProbedCamera> => {
-  const { Cam } = await import('onvif')
+  const { Cam } = await loadOnvif()
   const url = new URL(args.camera.xaddr)
 
   const cam = await new Promise<OnvifCamLike>((resolve, reject) => {

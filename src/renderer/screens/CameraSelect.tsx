@@ -12,13 +12,16 @@ export interface CameraChoice {
 
 export const CameraSelect = ({ onChoose }: { onChoose: (choice: CameraChoice) => void }) => {
   const [cameras, setCameras] = useState<readonly DiscoveredCamera[]>([])
+  const [failure, setFailure] = useState<string | null>(null)
   const [scanning, setScanning] = useState(true)
   const [manualOpen, setManualOpen] = useState(false)
   const [manualUri, setManualUri] = useState('')
 
   const scan = useCallback(async () => {
     setScanning(true)
-    setCameras(await api.discover())
+    const result = await api.discover()
+    setCameras(result.ok ? result.cameras : [])
+    setFailure(result.ok ? null : result.message)
     setScanning(false)
   }, [])
 
@@ -32,7 +35,11 @@ export const CameraSelect = ({ onChoose }: { onChoose: (choice: CameraChoice) =>
         <div>
           <h1 className="text-xl font-semibold text-slate-900">매장 카메라 연결</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {scanning ? '주변 카메라를 찾는 중입니다…' : `카메라 ${cameras.length}대를 찾았습니다`}
+            {scanning
+            ? '주변 카메라를 찾는 중입니다…'
+            : failure
+              ? '검색을 실행하지 못했습니다'
+              : `카메라 ${cameras.length}대를 찾았습니다`}
           </p>
         </div>
         <Button onClick={() => void scan()} disabled={scanning}>
@@ -40,6 +47,14 @@ export const CameraSelect = ({ onChoose }: { onChoose: (choice: CameraChoice) =>
           다시 검색
         </Button>
       </header>
+
+      {failure && (
+        <Notice tone="bad">
+          카메라 검색 기능에 문제가 있습니다. 아래에서 주소를 직접 입력하면 그대로 사용할 수
+          있습니다.
+          <span className="mt-1 block font-mono text-xs opacity-80">{failure}</span>
+        </Notice>
+      )}
 
       <Card>
         {scanning && cameras.length === 0 ? (

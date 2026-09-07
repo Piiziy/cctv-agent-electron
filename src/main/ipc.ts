@@ -3,7 +3,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ipcMain, shell, type BrowserWindow } from 'electron'
-import { IPC, type ProbeArgs, type ProbeResult, type SnapshotResult } from '../shared/ipc'
+import { IPC, type DiscoverResult, type ProbeArgs, type ProbeResult, type SnapshotResult } from '../shared/ipc'
 import type { AgentConfig, AgentStatus, SelectedCamera } from '../shared/types'
 import type { Agent } from './services/agent'
 import { classifyProfiles, isAuthFailure, probeCamera } from './services/camera-probe'
@@ -30,7 +30,13 @@ const toProbeFailure = (error: unknown): ProbeResult => {
 }
 
 export const registerIpc = (agent: Agent, getWindow: () => BrowserWindow | null, spoolDir: string): void => {
-  ipcMain.handle(IPC.discover, (_event, timeoutMs?: number) => discoverCameras(timeoutMs ?? 5000))
+  ipcMain.handle(IPC.discover, async (_event, timeoutMs?: number): Promise<DiscoverResult> => {
+    try {
+      return { ok: true, cameras: await discoverCameras(timeoutMs ?? 5000) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
 
   ipcMain.handle(IPC.probe, async (_event, args: ProbeArgs): Promise<ProbeResult> => {
     try {

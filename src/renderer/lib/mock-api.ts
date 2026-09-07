@@ -97,9 +97,9 @@ export const createMockApi = (): AgentApi => {
   }
 
   return {
-    discover: async (): Promise<DiscoveredCamera[]> => {
+    discover: async () => {
       await delay(1200)
-      return CAMERAS
+      return { ok: true as const, cameras: CAMERAS }
     },
     probe: async () => {
       await delay(700)

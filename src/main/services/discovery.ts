@@ -1,4 +1,5 @@
 import type { DiscoveredCamera } from '../../shared/types'
+import { loadOnvif } from '../lib/onvif-module'
 import { parseScopes } from './camera-probe'
 
 const DEFAULT_TIMEOUT_MS = 5000
@@ -67,14 +68,15 @@ export const toDiscoveredCameras = (responses: readonly unknown[]): DiscoveredCa
  * 접속을 시도하는데, 검색 시점에는 아직 사용자가 비밀번호를 입력하기 전이다.
  */
 export const discoverCameras = async (timeoutMs = DEFAULT_TIMEOUT_MS): Promise<DiscoveredCamera[]> => {
-  const { Discovery } = await import('onvif')
-  const responses = await new Promise<unknown[]>((resolve) => {
+  const { Discovery } = await loadOnvif()
+  const responses = await new Promise<unknown[]>((resolve, reject) => {
     try {
-      ;(Discovery as any).probe({ timeout: timeoutMs, resolve: false }, (error: Error | null, found: unknown[]) => {
-        resolve(error || !Array.isArray(found) ? [] : found)
+      Discovery.probe({ timeout: timeoutMs, resolve: false }, (error, found) => {
+        // 응답이 하나도 없는 것은 정상이다(카메라가 없는 매장). 오류만 걸러낸다.
+        resolve(Array.isArray(found) ? found : [])
       })
-    } catch {
-      resolve([])
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)))
     }
   })
   return toDiscoveredCameras(responses)

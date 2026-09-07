@@ -96,7 +96,7 @@ export const Dashboard = ({ status, config, onStop, onChangeCamera }: Props) => 
           </div>
         </Card>
 
-        <Card className="grid grid-cols-2 gap-4 p-4">
+        <Card className="grid grid-cols-2 content-start gap-x-4 gap-y-6 p-4">
           <Stat label="업로드" value={status.uploadedCount.toLocaleString()} />
           <Stat label="대기 중" value={status.pendingCount.toLocaleString()} />
           <Stat label="마지막 전송" value={formatRelativeTime(status.lastUploadAt)} />
