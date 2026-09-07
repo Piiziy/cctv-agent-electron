@@ -27,6 +27,8 @@ export interface StreamProfile {
   readonly width: number
   readonly height: number
   readonly fps: number
+  /** 카메라가 보고한 비트레이트(kbps). 화면에서 예상 사용량을 계산하는 데 쓴다. */
+  readonly bitrateKbps: number | null
 }
 
 export interface ProbedCamera {

@@ -122,9 +122,14 @@ export const makeHarness = (
   }
 }
 
+/**
+ * 조건이 만족될 때까지 폴링한다.
+ * 기본 대기가 넉넉한 이유: ffmpeg 가 도는 동안에는 CPU 경합으로 비동기 루프가
+ * 밀려서, 빠듯한 대기 시간은 로직이 아니라 부하 때문에 실패한다.
+ */
 export const waitFor = async (
   predicate: () => boolean | Promise<boolean>,
-  { timeoutMs = 3000, stepMs = 5 } = {},
+  { timeoutMs = 15_000, stepMs = 5 } = {},
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {

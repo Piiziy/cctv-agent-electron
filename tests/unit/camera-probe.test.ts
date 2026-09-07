@@ -14,6 +14,7 @@ const raw = (over: Partial<RawProfile> = {}): RawProfile => ({
   width: 1920,
   height: 1080,
   fps: 15,
+  bitrateKbps: 2048,
   rtspUri: 'rtsp://cam/Streaming/Channels/101',
   ...over,
 })
@@ -64,6 +65,16 @@ describe('classifyProfiles', () => {
       raw({ token: 'ok', encoding: 'H264' }),
     ])
     expect(result.map((p) => p.token)).toEqual(['ok'])
+  })
+})
+
+describe('classifyProfiles — 비트레이트', () => {
+  it('카메라가 보고한 비트레이트를 그대로 옮긴다 (화면의 사용량 안내에 쓰인다)', () => {
+    expect(classifyProfiles([raw({ bitrateKbps: 512 })])[0]!.bitrateKbps).toBe(512)
+  })
+
+  it('비트레이트를 모르면 null', () => {
+    expect(classifyProfiles([raw({ bitrateKbps: null })])[0]!.bitrateKbps).toBeNull()
   })
 })
 

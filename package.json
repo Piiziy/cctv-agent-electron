@@ -10,11 +10,12 @@
     "preview": "electron-vite preview",
     "ui": "vite --config vite.ui.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "npm run test:unit && npm run test:e2e",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:e2e": "vitest run tests/e2e",
-    "fake-camera": "vite-node tools/fake-camera/cli.ts"
+    "fake-camera": "vite-node tools/fake-camera/cli.ts",
+    "dist": "electron-vite build && electron-builder"
   },
   "dependencies": {
     "ffmpeg-static": "^5.2.0",
@@ -27,8 +28,10 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.5.5",
     "clsx": "^2.1.1",
     "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -36,6 +39,34 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",
+    "vite-node": "^2.1.8",
     "vitest": "^2.1.8"
+  },
+  "build": {
+    "appId": "kr.cashdoc.cctv-agent",
+    "productName": "CCTV 수집기",
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "src/main/assets",
+        "to": "."
+      }
+    ],
+    "asarUnpack": [
+      "**/node_modules/ffmpeg-static/**",
+      "**/node_modules/ffprobe-static/**"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

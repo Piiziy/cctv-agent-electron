@@ -13,6 +13,7 @@ export interface RawProfile {
   readonly width: number
   readonly height: number
   readonly fps: number
+  readonly bitrateKbps: number | null
   readonly rtspUri: string
 }
 
@@ -42,6 +43,7 @@ export const classifyProfiles = (profiles: readonly RawProfile[]): StreamProfile
       width: profile.width,
       height: profile.height,
       fps: profile.fps,
+      bitrateKbps: profile.bitrateKbps,
     }))
 
 /**
@@ -136,6 +138,7 @@ export const toRawProfile = (profile: unknown): RawProfile | null => {
     width: Number(encoder.resolution?.width ?? 0),
     height: Number(encoder.resolution?.height ?? 0),
     fps: Number(encoder.rateControl?.frameRateLimit ?? 0),
+    bitrateKbps: Number(encoder.rateControl?.bitrateLimit ?? 0) || null,
     rtspUri: '',
   }
 }

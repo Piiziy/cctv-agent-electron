@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-900 antialiased;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Segoe UI',
+      'Malgun Gothic', sans-serif;
+  }
+
+  /* 매장 PC 에서 드래그로 텍스트가 잡히는 것은 앱답지 않다. 입력 요소만 허용한다. */
+  * {
+    @apply select-none;
+  }
+
+  input,
+  textarea {
+    @apply select-text;
+  }
+}
