@@ -34,8 +34,9 @@ export const parseSegmentStartedAt = (name: string): Date | null => {
 
 export const createSpoolStore = (dir: string, limitBytes: number): SpoolStore => {
   const list = async (): Promise<SpoolEntry[]> => {
-    await mkdir(dir, { recursive: true })
-    const names = await readdir(dir)
+    // 스풀 디렉토리가 없거나 도중에 사라져도 목록 조회는 실패하지 않아야 한다.
+    await mkdir(dir, { recursive: true }).catch(() => undefined)
+    const names = await readdir(dir).catch(() => [] as string[])
     const entries = await Promise.all(
       names
         .filter((name) => name !== MANIFEST_NAME)
