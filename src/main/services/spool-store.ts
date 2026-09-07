@@ -1,16 +1,16 @@
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { MANIFEST_NAME } from '../lib/segment-args'
 
 export interface SpoolEntry {
   readonly path: string
   readonly name: string
   readonly sizeBytes: number
-  readonly startedAt: Date
+  /** 조각이 닫힌 시각. 파일명에 새겨져 있다. 시작 시각은 여기서 길이를 빼서 구한다. */
+  readonly closedAt: Date
 }
 
 export interface SpoolStore {
-  /** 오래된 순으로 정렬된 완성 조각 목록. */
+  /** 오래된 순으로 정렬된 완성 조각 목록. 쓰는 중인 조각은 parts/ 에 있어 여기 안 잡힌다. */
   list(): Promise<SpoolEntry[]>
   oldest(): Promise<SpoolEntry | null>
   remove(path: string): Promise<void>
@@ -19,17 +19,21 @@ export interface SpoolStore {
   enforceLimit(): Promise<number>
 }
 
-const SEGMENT_NAME = /^seg_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.mp4$/
+const SEGMENT_NAME = /^seg_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})_(\d{3})\.mp4$/
 
-/**
- * 조각 파일명에서 시작 시각을 뽑는다.
- * ffmpeg의 `-strftime 1` 은 로컬 시각을 쓰므로 로컬 Date로 해석한다.
- */
-export const parseSegmentStartedAt = (name: string): Date | null => {
+const pad = (value: number, width: number): string => String(value).padStart(width, '0')
+
+/** 완성된 조각의 파일명. 닫힌 시각을 로컬 시각으로 새긴다 (밀리초까지 — 충돌 방지). */
+export const formatSegmentName = (closedAt: Date): string =>
+  `seg_${closedAt.getFullYear()}${pad(closedAt.getMonth() + 1, 2)}${pad(closedAt.getDate(), 2)}` +
+  `_${pad(closedAt.getHours(), 2)}${pad(closedAt.getMinutes(), 2)}${pad(closedAt.getSeconds(), 2)}` +
+  `_${pad(closedAt.getMilliseconds(), 3)}.mp4`
+
+export const parseSegmentClosedAt = (name: string): Date | null => {
   const matched = SEGMENT_NAME.exec(name)
   if (!matched) return null
-  const [year, month, day, hour, minute, second] = matched.slice(1).map(Number) as number[]
-  return new Date(year!, month! - 1, day!, hour!, minute!, second!)
+  const [year, month, day, hour, minute, second, ms] = matched.slice(1).map(Number) as number[]
+  return new Date(year!, month! - 1, day!, hour!, minute!, second!, ms!)
 }
 
 export const createSpoolStore = (dir: string, limitBytes: number): SpoolStore => {
@@ -38,19 +42,17 @@ export const createSpoolStore = (dir: string, limitBytes: number): SpoolStore =>
     await mkdir(dir, { recursive: true }).catch(() => undefined)
     const names = await readdir(dir).catch(() => [] as string[])
     const entries = await Promise.all(
-      names
-        .filter((name) => name !== MANIFEST_NAME)
-        .map(async (name) => {
-          const startedAt = parseSegmentStartedAt(name)
-          if (!startedAt) return null
-          const path = join(dir, name)
-          const stats = await stat(path).catch(() => null)
-          return stats?.isFile() ? { path, name, sizeBytes: stats.size, startedAt } : null
-        }),
+      names.map(async (name) => {
+        const closedAt = parseSegmentClosedAt(name)
+        if (!closedAt) return null
+        const path = join(dir, name)
+        const stats = await stat(path).catch(() => null)
+        return stats?.isFile() ? { path, name, sizeBytes: stats.size, closedAt } : null
+      }),
     )
     return entries
       .filter((entry): entry is SpoolEntry => entry !== null)
-      .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
+      .sort((a, b) => a.closedAt.getTime() - b.closedAt.getTime())
   }
 
   const remove = async (path: string): Promise<void> => {

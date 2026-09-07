@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSegmentArgs, MANIFEST_NAME } from '../../src/main/lib/segment-args'
+import { buildSegmentArgs } from '../../src/main/lib/segment-args'
 
 const base = {
   rtspUri: 'rtsp://cam.local/live',
@@ -27,7 +27,7 @@ describe('buildSegmentArgs', () => {
   })
 
   it('manifest를 반드시 지정한다 (조각 완성 신호)', () => {
-    expect(joined()).toContain(`-segment_list /tmp/spool/${MANIFEST_NAME}`)
+    expect(joined()).toContain('-segment_list /tmp/spool/parts/manifest.txt')
     expect(joined()).toContain('-segment_list_type flat')
   })
 
@@ -35,9 +35,12 @@ describe('buildSegmentArgs', () => {
     expect(joined()).toContain('-segment_list_flags +live')
   })
 
-  it('파일명에 벽시계 시각을 박는다', () => {
-    expect(joined()).toContain('-strftime 1')
-    expect(joined()).toContain('/tmp/spool/seg_%Y%m%d_%H%M%S.mp4')
+  it('쓰는 중인 조각은 parts/ 하위에 쓴다 (완성된 것과 물리적으로 분리)', () => {
+    expect(joined()).toContain('/tmp/spool/parts/part_%05d.mp4')
+  })
+
+  it('파일명에 시각(strftime)을 쓰지 않는다 — 초 단위라 짧은 조각에서 충돌한다', () => {
+    expect(joined()).not.toContain('-strftime')
   })
 
   it('소켓 타임아웃을 건다 (응답 없는 카메라에 무한 대기 방지)', () => {
@@ -57,6 +60,6 @@ describe('buildSegmentArgs', () => {
   it('입력(-i)이 출력 경로보다 먼저 온다', () => {
     const args = buildSegmentArgs(base)
     expect(args.indexOf('-i')).toBeLessThan(args.length - 1)
-    expect(args[args.length - 1]).toBe('/tmp/spool/seg_%Y%m%d_%H%M%S.mp4')
+    expect(args[args.length - 1]).toBe('/tmp/spool/parts/part_%05d.mp4')
   })
 })

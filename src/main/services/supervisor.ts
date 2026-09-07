@@ -165,8 +165,9 @@ export const createSupervisor = (deps: SupervisorDeps): Supervisor => {
         sizeBytes: entry.sizeBytes,
         container: 'mp4',
       },
-      startedAt: entry.startedAt.toISOString(),
-      endedAt: new Date(entry.startedAt.getTime() + probed.durationMs).toISOString(),
+      // 파일명에 새겨진 시각은 조각이 '닫힌' 시각이다. 시작 시각은 실제 길이를 빼서 구한다.
+      startedAt: new Date(entry.closedAt.getTime() - probed.durationMs).toISOString(),
+      endedAt: entry.closedAt.toISOString(),
       sequence: deps.config.nextSequence(camera.id),
       agentVersion: AGENT_VERSION,
     }

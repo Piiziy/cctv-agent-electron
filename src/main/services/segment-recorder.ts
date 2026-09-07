@@ -1,8 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, statSync } from 'node:fs'
-import { open, stat } from 'node:fs/promises'
+import { mkdirSync, rmSync, statSync } from 'node:fs'
+import { open, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { buildSegmentArgs, MANIFEST_NAME } from '../lib/segment-args'
+import { buildSegmentArgs, manifestPathOf, partsDirOf } from '../lib/segment-args'
+import { formatSegmentName } from './spool-store'
 
 export interface SegmentEvent {
   readonly path: string
@@ -108,14 +109,44 @@ export interface SegmentRecorder {
 
 const KILL_GRACE_MS = 3000
 
+/**
+ * 완성된 조각을 parts/ 에서 스풀 루트로 옮긴다.
+ *
+ * 이 이동이 곧 "완성" 표시다. 스풀 루트에 있는 파일은 전부 다 쓰인 것이므로
+ * 업로더가 미완성 파일을 집어갈 수 없다. 파일명에는 mtime(= 닫힌 시각)을 새긴다.
+ */
+export const promoteSegment = async (partPath: string, spoolDir: string): Promise<SegmentEvent | null> => {
+  const stats = await stat(partPath).catch(() => null)
+  if (!stats?.isFile() || stats.size === 0) return null
+
+  // 같은 밀리초에 두 조각이 닫히는 일은 사실상 없지만, 겹치면 1ms 씩 밀어 이름을 비운다.
+  const target = await (async () => {
+    for (let offset = 0; offset < 50; offset += 1) {
+      const name = formatSegmentName(new Date(stats.mtimeMs + offset))
+      const path = join(spoolDir, name)
+      const exists = await stat(path).then(() => true).catch(() => false)
+      if (!exists) return { name, path }
+    }
+    return null
+  })()
+  if (!target) return null
+
+  await rename(partPath, target.path)
+  return target
+}
+
 export const createSegmentRecorder = (options: SegmentRecorderOptions): SegmentRecorder => {
-  const manifestPath = join(options.spoolDir, MANIFEST_NAME)
+  const partsDir = partsDirOf(options.spoolDir)
   const state = { child: null as ChildProcess | null, stderr: '', stopping: false }
 
   const watcher = createManifestWatcher({
-    manifestPath,
-    spoolDir: options.spoolDir,
-    onSegment: options.onSegment,
+    manifestPath: manifestPathOf(options.spoolDir),
+    spoolDir: partsDir,
+    onSegment: (part) => {
+      void promoteSegment(part.path, options.spoolDir).then((promoted) => {
+        if (promoted) options.onSegment(promoted)
+      })
+    },
     ...(options.pollMs === undefined ? {} : { pollMs: options.pollMs }),
   })
 
@@ -124,7 +155,10 @@ export const createSegmentRecorder = (options: SegmentRecorderOptions): SegmentR
 
     start: () => {
       if (state.child) return
-      mkdirSync(options.spoolDir, { recursive: true })
+      mkdirSync(partsDir, { recursive: true })
+      // 이전 실행이 남긴 미완성 조각은 버린다. 완성된 것은 이미 스풀 루트로 옮겨졌다.
+      rmSync(partsDir, { recursive: true, force: true })
+      mkdirSync(partsDir, { recursive: true })
       state.stderr = ''
       state.stopping = false
 
