@@ -1,0 +1,135 @@
+/**
+ * 메인 프로세스와 렌더러가 공유하는 타입.
+ * 백엔드 API 규격(SegmentMeta)의 단일 출처이기도 하다.
+ */
+
+export type StreamProfileKind = 'main' | 'sub'
+export type VideoCodec = 'h264' | 'h265'
+
+/** ONVIF 검색으로 발견된 카메라. 아직 인증 전이라 스트림 정보는 없다. */
+export interface DiscoveredCamera {
+  /** XAddr 기반 안정 식별자. DHCP로 IP가 바뀌어도 유지된다. */
+  readonly id: string
+  readonly xaddr: string
+  readonly ip: string
+  readonly port: number
+  readonly manufacturer: string | null
+  readonly model: string | null
+  readonly name: string | null
+}
+
+/** 인증 후 조회한 스트림 프로필 하나. */
+export interface StreamProfile {
+  readonly token: string
+  readonly kind: StreamProfileKind
+  readonly rtspUri: string
+  readonly codec: VideoCodec
+  readonly width: number
+  readonly height: number
+  readonly fps: number
+}
+
+export interface ProbedCamera {
+  readonly camera: DiscoveredCamera
+  readonly profiles: readonly StreamProfile[]
+}
+
+/** 사용자가 최종 선택해 수집 대상이 된 카메라. 설정에 영속된다. */
+export interface SelectedCamera {
+  readonly id: string
+  readonly name: string
+  readonly manufacturer: string | null
+  readonly model: string | null
+  readonly rtspUri: string
+  readonly streamProfile: StreamProfileKind
+  readonly codec: VideoCodec
+  readonly width: number
+  readonly height: number
+  readonly fps: number
+}
+
+export interface AgentConfig {
+  readonly backendBaseUrl: string
+  readonly deviceToken: string
+  readonly storeId: string
+  /** 최초 실행 시 자동 생성 후 영속. 사용자가 편집하지 않는다. */
+  readonly deviceId: string
+  readonly segmentSeconds: number
+  readonly streamProfile: StreamProfileKind
+  readonly spoolLimitBytes: number
+  readonly includeAudio: boolean
+  readonly autoStart: boolean
+  readonly selectedCamera: SelectedCamera | null
+}
+
+/** 백엔드로 보내는 meta 파트. 이 모양이 곧 API 계약이다. */
+export interface SegmentMeta {
+  readonly segmentId: string
+  readonly storeId: string
+  readonly deviceId: string
+  readonly camera: {
+    readonly id: string
+    readonly name: string
+    readonly manufacturer: string | null
+    readonly model: string | null
+    readonly streamProfile: StreamProfileKind
+  }
+  readonly video: {
+    readonly codec: VideoCodec
+    readonly width: number
+    readonly height: number
+    readonly fps: number
+    readonly durationMs: number
+    readonly sizeBytes: number
+    readonly container: 'mp4'
+  }
+  readonly startedAt: string
+  readonly endedAt: string
+  /** (deviceId, camera.id)마다 0부터 증가. 생성 순서지 업로드 순서가 아니다. */
+  readonly sequence: number
+  readonly agentVersion: string
+}
+
+export type CameraStatus =
+  | 'idle'
+  | 'connecting'
+  | 'streaming'
+  | 'reconnecting'
+  | 'auth-failed'
+
+export type UploadStatus =
+  | 'idle'
+  | 'uploading'
+  | 'retrying'
+  | 'offline'
+  | 'auth-failed'
+  | 'payload-too-large'
+
+export interface AgentStatus {
+  readonly running: boolean
+  readonly camera: CameraStatus
+  readonly upload: UploadStatus
+  readonly uploadedCount: number
+  readonly pendingCount: number
+  readonly lastUploadAt: string | null
+  readonly spoolBytes: number
+  readonly spoolLimitBytes: number
+  readonly bytesUploadedToday: number
+  readonly lastError: string | null
+  /** 상한 초과로 오래된 조각을 버린 적이 있는지. 화면에 경고를 남긴다. */
+  readonly spoolEvicted: boolean
+}
+
+export const DEFAULT_CONFIG: Omit<AgentConfig, 'deviceId'> = {
+  backendBaseUrl: '',
+  deviceToken: '',
+  storeId: '',
+  segmentSeconds: 300,
+  streamProfile: 'sub',
+  spoolLimitBytes: 5 * 1024 ** 3,
+  includeAudio: false,
+  autoStart: true,
+  selectedCamera: null,
+}
+
+export const AGENT_VERSION = '1.0.0'
