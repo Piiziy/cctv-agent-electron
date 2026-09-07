@@ -1,0 +1,79 @@
+import { randomBytes } from 'node:crypto'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { DEFAULT_CONFIG, type AgentConfig } from '../../shared/types'
+
+interface Persisted extends AgentConfig {
+  /** 카메라별 조각 일련번호. 재시작 후에도 이어지도록 설정과 함께 보관한다. */
+  readonly sequences: Readonly<Record<string, number>>
+}
+
+export interface ConfigStore {
+  read(): AgentConfig
+  write(patch: Partial<AgentConfig>): AgentConfig
+  /** (deviceId, cameraId)마다 0부터 증가하는 조각 일련번호를 하나 발급한다. */
+  nextSequence(cameraId: string): number
+}
+
+const createDeviceId = (): string => `agent-${randomBytes(6).toString('hex')}`
+
+type DefaultKey = keyof typeof DEFAULT_CONFIG
+const CONFIG_KEYS = Object.keys(DEFAULT_CONFIG) as DefaultKey[]
+
+/** 알 수 없는 필드를 버리고 기본값을 채운 정규 설정을 만든다. */
+const normalize = (raw: unknown): Persisted => {
+  const source = (raw ?? {}) as Record<string, unknown>
+  const config = CONFIG_KEYS.reduce<Record<string, unknown>>(
+    (acc, key) => ({ ...acc, [key]: source[key] ?? DEFAULT_CONFIG[key] }),
+    {},
+  )
+  const deviceId = typeof source.deviceId === 'string' && source.deviceId.length > 0
+    ? source.deviceId
+    : createDeviceId()
+  const sequences = typeof source.sequences === 'object' && source.sequences !== null
+    ? (source.sequences as Record<string, number>)
+    : {}
+  return { ...config, deviceId, sequences } as Persisted
+}
+
+/**
+ * 설정 파일이 반쯤 쓰인 채 남는 상황(정전 등)에도 앱이 뜨는 것을 우선한다.
+ * 읽기 실패는 기본값으로 조용히 복구하고, 쓰기는 임시 파일 → rename 으로 원자화한다.
+ * 무인매장에는 복구해 줄 사람이 없다.
+ */
+export const createConfigStore = (filePath: string): ConfigStore => {
+  const load = (): Persisted => {
+    try {
+      return normalize(JSON.parse(readFileSync(filePath, 'utf8')))
+    } catch {
+      return normalize(null)
+    }
+  }
+
+  const save = (next: Persisted): Persisted => {
+    mkdirSync(dirname(filePath), { recursive: true })
+    const temp = join(dirname(filePath), `.${randomBytes(4).toString('hex')}.tmp`)
+    writeFileSync(temp, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+    renameSync(temp, filePath)
+    return next
+  }
+
+  // 최초 실행이거나 파일이 깨졌으면 지금 정규화해 두어야 deviceId가 고정된다.
+  const initial = load()
+  save(initial)
+
+  const toConfig = ({ sequences: _ignored, ...config }: Persisted): AgentConfig => config
+
+  return {
+    read: () => toConfig(load()),
+
+    write: (patch) => toConfig(save({ ...load(), ...patch })),
+
+    nextSequence: (cameraId) => {
+      const current = load()
+      const value = current.sequences[cameraId] ?? 0
+      save({ ...current, sequences: { ...current.sequences, [cameraId]: value + 1 } })
+      return value
+    },
+  }
+}
