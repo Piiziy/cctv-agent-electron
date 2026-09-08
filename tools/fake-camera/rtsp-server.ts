@@ -281,14 +281,28 @@ export const startRtspServer = async (options: FakeRtspOptions): Promise<RtspSer
   await new Promise<void>((resolve) => server.listen(options.port ?? 0, host, resolve))
   const port = (server.address() as { port: number }).port
 
+  // 테스트는 카메라를 중간에 내렸다가 정리 단계에서 또 내리기도 한다.
+  // 두 번째 호출에서 예외가 나면 정리가 중단돼 프로세스가 남는다.
+  const closed = { done: false }
+
   return {
     port,
     urls: Object.fromEntries(paths.map((path) => [path, `rtsp://${host}:${port}/${path}`])),
     close: async () => {
+      if (closed.done) return
+      closed.done = true
       streams.forEach((stream) => {
         stream.subscribers.forEach((socket) => socket.destroy())
-        stream.ffmpeg.kill('SIGKILL')
-        stream.udp.close()
+        try {
+          stream.ffmpeg.kill('SIGKILL')
+        } catch {
+          // 이미 죽었다
+        }
+        try {
+          stream.udp.close()
+        } catch {
+          // 이미 닫혔다
+        }
       })
       openSockets.forEach((socket) => socket.destroy())
       openSockets.clear()

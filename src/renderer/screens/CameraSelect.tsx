@@ -14,9 +14,11 @@ interface Props {
   readonly onChoose: (choice: CameraChoice) => void
   /** 이미 감시 중인 카메라가 있을 때만 준다. 없으면 돌아갈 곳이 없다. */
   readonly onCancel: (() => void) | null
+  /** 이미 감시 목록에 들어 있는 카메라 id. 중복 추가를 막는다. */
+  readonly addedIds: readonly string[]
 }
 
-export const CameraSelect = ({ onChoose, onCancel }: Props) => {
+export const CameraSelect = ({ onChoose, onCancel, addedIds }: Props) => {
   const [cameras, setCameras] = useState<readonly DiscoveredCamera[]>([])
   const [failure, setFailure] = useState<string | null>(null)
   const [scanning, setScanning] = useState(true)
@@ -35,6 +37,8 @@ export const CameraSelect = ({ onChoose, onCancel }: Props) => {
     void scan()
   }, [scan])
 
+  const added = new Set(addedIds)
+
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
       <header className="flex items-end justify-between">
@@ -45,13 +49,13 @@ export const CameraSelect = ({ onChoose, onCancel }: Props) => {
             </Button>
           )}
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">매장 카메라 연결</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {scanning
-            ? '주변 카메라를 찾는 중입니다…'
-            : failure
-              ? '검색을 실행하지 못했습니다'
-              : `카메라 ${cameras.length}대를 찾았습니다`}
+            <h1 className="text-xl font-semibold text-slate-900">카메라 추가</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {scanning
+                ? '주변 카메라를 찾는 중입니다…'
+                : failure
+                  ? '검색을 실행하지 못했습니다'
+                  : `카메라 ${cameras.length}대를 찾았습니다`}
             </p>
           </div>
         </div>
@@ -83,30 +87,43 @@ export const CameraSelect = ({ onChoose, onCancel }: Props) => {
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {cameras.map((camera) => (
-              <li key={camera.id}>
-                <button
-                  type="button"
-                  onClick={() => onChoose({ kind: 'onvif', camera, rtspUri: '' })}
-                  className={cn(
-                    'w-full text-left transition-colors',
-                    'flex items-center justify-between gap-4 px-4 py-3.5',
-                    'hover:bg-slate-50 active:bg-slate-100',
-                  )}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-slate-900">
-                      {camera.manufacturer ?? '알 수 없는 카메라'}
-                      {camera.model ? ` ${camera.model}` : ''}
+            {cameras.map((camera) => {
+              const alreadyAdded = added.has(camera.id)
+              return (
+                <li key={camera.id}>
+                  <button
+                    type="button"
+                    disabled={alreadyAdded}
+                    onClick={() => onChoose({ kind: 'onvif', camera, rtspUri: '' })}
+                    className={cn(
+                      'w-full text-left transition-colors',
+                      'flex items-center justify-between gap-4 px-4 py-3.5',
+                      alreadyAdded
+                        ? 'cursor-not-allowed opacity-55'
+                        : 'hover:bg-slate-50 active:bg-slate-100',
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-slate-900">
+                        {camera.manufacturer ?? '알 수 없는 카메라'}
+                        {camera.model ? ` ${camera.model}` : ''}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-slate-500">
+                        {camera.ip} · ONVIF
+                      </span>
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-slate-500">
-                      {camera.ip} · ONVIF
+                    <span
+                      className={cn(
+                        'shrink-0 text-sm font-medium',
+                        alreadyAdded ? 'text-slate-400' : 'text-indigo-600',
+                      )}
+                    >
+                      {alreadyAdded ? '추가됨' : '추가'}
                     </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-medium text-indigo-600">연결</span>
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         )}
       </Card>
@@ -137,7 +154,7 @@ export const CameraSelect = ({ onChoose, onCancel }: Props) => {
               disabled={!manualUri.startsWith('rtsp://')}
               onClick={() => onChoose({ kind: 'manual', camera: null, rtspUri: manualUri.trim() })}
             >
-              이 주소로 연결
+              이 주소로 추가
             </Button>
           </div>
         </Card>

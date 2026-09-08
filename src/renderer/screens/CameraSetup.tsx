@@ -18,10 +18,10 @@ interface Props {
   readonly choice: CameraChoice
   readonly initialSegmentSeconds: number
   readonly onBack: () => void
-  readonly onStart: (camera: SelectedCamera, segmentSeconds: number) => Promise<void>
+  readonly onAdd: (camera: SelectedCamera, segmentSeconds: number) => Promise<void>
 }
 
-export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onStart }: Props) => {
+export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onAdd }: Props) => {
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
   const [probing, setProbing] = useState(false)
@@ -61,7 +61,7 @@ export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onStart }: 
   const start = async (): Promise<void> => {
     if (!selected) return
     setStarting(true)
-    await onStart(
+    await onAdd(
       {
         id: choice.camera?.id ?? selected.rtspUri,
         name: name.trim() || '카메라',
@@ -228,6 +228,7 @@ export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onStart }: 
               </div>
               <p className="mt-2 text-xs text-slate-500">
                 조각이 길수록 알림이 늦습니다. 5분으로 두면 이상행동 알림이 최대 5분 뒤에 옵니다.
+                이 값은 모든 카메라에 함께 적용됩니다.
               </p>
             </div>
 
@@ -239,7 +240,7 @@ export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onStart }: 
                 className="px-6"
               >
                 {starting ? <Spinner /> : null}
-                감시 시작
+                감시 목록에 추가
               </Button>
             </div>
           </Card>

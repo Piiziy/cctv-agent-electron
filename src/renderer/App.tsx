@@ -11,7 +11,7 @@ type Screen = 'server' | 'select' | 'setup' | 'dashboard'
 
 const initialScreen = (config: AgentConfig): Screen => {
   if (!config.backendBaseUrl || !config.deviceToken || !config.storeId) return 'server'
-  return config.selectedCamera ? 'dashboard' : 'select'
+  return config.cameras.length > 0 ? 'dashboard' : 'select'
 }
 
 export const App = () => {
@@ -34,18 +34,43 @@ export const App = () => {
     setConfig(await api.setConfig(patch))
   }, [])
 
-  const startMonitoring = useCallback(
+  /** 카메라 목록을 갈아끼우고 감시를 다시 건다. */
+  const applyCameras = useCallback(async (cameras: readonly SelectedCamera[]) => {
+    await api.start(cameras)
+    setConfig(await api.getConfig())
+    setStatus(await api.getStatus())
+  }, [])
+
+  const addCamera = useCallback(
     async (camera: SelectedCamera, segmentSeconds: number) => {
       await api.setConfig({ segmentSeconds, streamProfile: camera.streamProfile })
-      await api.start(camera)
-      setConfig(await api.getConfig())
-      setStatus(await api.getStatus())
+      const current = await api.getConfig()
+      // 같은 카메라를 두 번 넣으면 같은 폴더를 두 프로세스가 쓰게 된다.
+      const next = [...current.cameras.filter((c) => c.id !== camera.id), camera]
+      await applyCameras(next)
       setScreen('dashboard')
     },
-    [],
+    [applyCameras],
   )
 
-  const stopMonitoring = useCallback(async () => {
+  const removeCamera = useCallback(
+    async (cameraId: string) => {
+      const current = await api.getConfig()
+      const next = current.cameras.filter((c) => c.id !== cameraId)
+      if (next.length === 0) {
+        await api.stop()
+        await api.setConfig({ cameras: [] })
+        setConfig(await api.getConfig())
+        setStatus(await api.getStatus())
+        setScreen('select')
+        return
+      }
+      await applyCameras(next)
+    },
+    [applyCameras],
+  )
+
+  const stopAll = useCallback(async () => {
     await api.stop()
     setStatus(await api.getStatus())
   }, [])
@@ -57,6 +82,8 @@ export const App = () => {
       </div>
     )
   }
+
+  const configured = Boolean(config.backendBaseUrl && config.deviceToken && config.storeId)
 
   return (
     <div className="flex h-full flex-col">
@@ -80,23 +107,22 @@ export const App = () => {
             config={config}
             onSave={async (patch) => {
               await saveConfig(patch)
-              setScreen(config.selectedCamera ? 'dashboard' : 'select')
+              setScreen(config.cameras.length > 0 ? 'dashboard' : 'select')
             }}
             onCancel={
-              config.backendBaseUrl && config.deviceToken && config.storeId
-                ? () => setScreen(config.selectedCamera ? 'dashboard' : 'select')
-                : null
+              configured ? () => setScreen(config.cameras.length > 0 ? 'dashboard' : 'select') : null
             }
           />
         )}
 
         {screen === 'select' && (
           <CameraSelect
+            addedIds={config.cameras.map((c) => c.id)}
             onChoose={(next) => {
               setChoice(next)
               setScreen('setup')
             }}
-            onCancel={config.selectedCamera ? () => setScreen('dashboard') : null}
+            onCancel={config.cameras.length > 0 ? () => setScreen('dashboard') : null}
           />
         )}
 
@@ -105,7 +131,7 @@ export const App = () => {
             choice={choice}
             initialSegmentSeconds={config.segmentSeconds}
             onBack={() => setScreen('select')}
-            onStart={startMonitoring}
+            onAdd={addCamera}
           />
         )}
 
@@ -113,8 +139,9 @@ export const App = () => {
           <Dashboard
             status={status}
             config={config}
-            onStop={stopMonitoring}
-            onChangeCamera={() => setScreen('select')}
+            onStop={stopAll}
+            onAddCamera={() => setScreen('select')}
+            onRemoveCamera={removeCamera}
           />
         )}
       </main>

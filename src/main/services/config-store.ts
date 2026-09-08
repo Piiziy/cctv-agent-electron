@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { DEFAULT_CONFIG, type AgentConfig } from '../../shared/types'
+import { DEFAULT_CONFIG, type AgentConfig, type SelectedCamera } from '../../shared/types'
 
 interface Persisted extends AgentConfig {
   /** 카메라별 조각 일련번호. 재시작 후에도 이어지도록 설정과 함께 보관한다. */
@@ -20,6 +20,16 @@ const createDeviceId = (): string => `agent-${randomBytes(6).toString('hex')}`
 type DefaultKey = keyof typeof DEFAULT_CONFIG
 const CONFIG_KEYS = Object.keys(DEFAULT_CONFIG) as DefaultKey[]
 
+/**
+ * 1대만 고를 수 있던 시절의 설정을 여러 대 형식으로 옮긴다.
+ * 이 함수가 없으면 기존 사용자가 업데이트한 뒤 카메라를 다시 고르게 된다.
+ */
+const migrateCameras = (source: Record<string, unknown>): readonly SelectedCamera[] => {
+  if (Array.isArray(source.cameras)) return source.cameras as SelectedCamera[]
+  const legacy = source.selectedCamera
+  return legacy && typeof legacy === 'object' ? [legacy as SelectedCamera] : []
+}
+
 /** 알 수 없는 필드를 버리고 기본값을 채운 정규 설정을 만든다. */
 const normalize = (raw: unknown): Persisted => {
   const source = (raw ?? {}) as Record<string, unknown>
@@ -33,7 +43,7 @@ const normalize = (raw: unknown): Persisted => {
   const sequences = typeof source.sequences === 'object' && source.sequences !== null
     ? (source.sequences as Record<string, number>)
     : {}
-  return { ...config, deviceId, sequences } as Persisted
+  return { ...config, cameras: migrateCameras(source), deviceId, sequences } as Persisted
 }
 
 /**

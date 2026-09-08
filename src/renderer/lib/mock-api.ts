@@ -77,16 +77,11 @@ export const createMockApi = (): AgentApi => {
     config: { ...DEFAULT_CONFIG, deviceId: 'agent-mock0001' } as AgentConfig,
     status: {
       running: false,
-      camera: 'idle',
       upload: 'idle',
-      uploadedCount: 0,
-      pendingCount: 0,
-      lastUploadAt: null,
-      spoolBytes: 0,
-      spoolLimitBytes: DEFAULT_CONFIG.spoolLimitBytes,
+      cameras: [],
       bytesUploadedToday: 0,
+      spoolLimitBytesPerCamera: DEFAULT_CONFIG.spoolLimitBytes,
       lastError: null,
-      spoolEvicted: false,
     } as AgentStatus,
     timer: null as ReturnType<typeof setInterval> | null,
   }
@@ -118,16 +113,30 @@ export const createMockApi = (): AgentApi => {
       return { ok: true as const, url: PLACEHOLDER }
     },
     previewStop: async () => undefined,
-    start: async (camera) => {
-      store.config = { ...store.config, selectedCamera: camera }
-      publish({ running: true, camera: 'connecting', upload: 'idle' })
+    start: async (cameras) => {
+      store.config = { ...store.config, cameras }
+      const entries = cameras.map((camera) => ({
+        cameraId: camera.id,
+        name: camera.name,
+        camera: 'connecting' as const,
+        uploadedCount: 0,
+        pendingCount: 0,
+        lastUploadAt: null,
+        spoolBytes: 0,
+        lastError: null,
+        spoolEvicted: false,
+      }))
+      publish({ running: true, cameras: entries, upload: 'idle' })
       await delay(600)
-      publish({ camera: 'streaming' })
+      publish({ cameras: entries.map((e) => ({ ...e, camera: 'streaming' as const })) })
       store.timer = setInterval(() => {
         publish({
-          uploadedCount: store.status.uploadedCount + 1,
-          bytesUploadedToday: store.status.bytesUploadedToday + 19_783_421,
-          lastUploadAt: new Date().toISOString(),
+          cameras: store.status.cameras.map((c) => ({
+            ...c,
+            uploadedCount: c.uploadedCount + 1,
+            lastUploadAt: new Date().toISOString(),
+          })),
+          bytesUploadedToday: store.status.bytesUploadedToday + 19_783_421 * cameras.length,
           upload: 'idle',
         })
       }, 3000)
@@ -135,7 +144,7 @@ export const createMockApi = (): AgentApi => {
     stop: async () => {
       if (store.timer) clearInterval(store.timer)
       store.timer = null
-      publish({ running: false, camera: 'idle', upload: 'idle' })
+      publish({ running: false, cameras: [], upload: 'idle' })
     },
     getConfig: async () => store.config,
     setConfig: async (patch) => {

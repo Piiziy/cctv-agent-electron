@@ -38,7 +38,7 @@ const toProbeFailure = (error: unknown): ProbeResult => {
   }
 }
 
-export const registerIpc = (agent: Agent, getWindow: () => BrowserWindow | null, spoolDir: string): void => {
+export const registerIpc = (agent: Agent, getWindow: () => BrowserWindow | null, spoolRoot: string): void => {
   const preview = createPreviewService({ ffmpegPath: resolveFfmpegPath() })
 
   ipcMain.handle(IPC.previewStart, async (_event, rtspUri: string): Promise<PreviewResult> => {
@@ -122,14 +122,14 @@ export const registerIpc = (agent: Agent, getWindow: () => BrowserWindow | null,
     }
   })
 
-  ipcMain.handle(IPC.start, (_event, camera: SelectedCamera) => agent.supervisor.start(camera))
-  ipcMain.handle(IPC.stop, () => agent.supervisor.stop())
+  ipcMain.handle(IPC.start, (_event, cameras: SelectedCamera[]) => agent.fleet.start(cameras))
+  ipcMain.handle(IPC.stop, () => agent.fleet.stop())
   ipcMain.handle(IPC.getConfig, (): AgentConfig => agent.config.read())
   ipcMain.handle(IPC.setConfig, (_event, patch: Partial<AgentConfig>): AgentConfig =>
     agent.config.write(patch),
   )
-  ipcMain.handle(IPC.getStatus, (): AgentStatus => agent.supervisor.status())
-  ipcMain.handle(IPC.openSpoolFolder, () => shell.openPath(spoolDir))
+  ipcMain.handle(IPC.getStatus, (): AgentStatus => agent.fleet.status())
+  ipcMain.handle(IPC.openSpoolFolder, () => shell.openPath(spoolRoot))
 
   void getWindow
 }

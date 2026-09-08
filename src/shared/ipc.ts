@@ -57,7 +57,8 @@ export interface AgentApi {
   /** 실시간 미리보기 스트림을 켜고 <img src> 에 넣을 URL 을 받는다. */
   previewStart(rtspUri: string): Promise<PreviewResult>
   previewStop(): Promise<void>
-  start(camera: SelectedCamera): Promise<void>
+  /** 감시할 카메라 목록. 통째로 갈아끼운다. */
+  start(cameras: readonly SelectedCamera[]): Promise<void>
   stop(): Promise<void>
   getConfig(): Promise<AgentConfig>
   setConfig(patch: Partial<AgentConfig>): Promise<AgentConfig>

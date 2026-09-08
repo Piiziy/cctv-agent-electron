@@ -27,9 +27,13 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const trayTitle = (status: AgentStatus | null): string => {
-  if (!status?.running) return '감시 중지됨'
-  const camera = STATUS_LABEL[status.camera] ?? status.camera
-  return status.pendingCount > 0 ? `${camera} · 보관 ${status.pendingCount}개` : camera
+  if (!status?.running || status.cameras.length === 0) return '감시 중지됨'
+  const streaming = status.cameras.filter((c) => c.camera === 'streaming').length
+  const pending = status.cameras.reduce((sum, c) => sum + c.pendingCount, 0)
+  const head = `카메라 ${streaming}/${status.cameras.length}대 감시 중`
+  const trouble = status.cameras.find((c) => c.camera === 'auth-failed' || c.camera === 'reconnecting')
+  const detail = trouble ? ` · ${trouble.name} ${STATUS_LABEL[trouble.camera] ?? ''}` : ''
+  return pending > 0 ? `${head}${detail} · 보관 ${pending}개` : `${head}${detail}`
 }
 
 const createWindow = (): BrowserWindow => {
@@ -85,11 +89,11 @@ const refreshTray = (): void => {
           const agent = state.agent
           if (!agent) return
           if (running) {
-            void agent.supervisor.stop()
+            void agent.fleet.stop()
             return
           }
-          const camera = agent.config.read().selectedCamera
-          if (camera) void agent.supervisor.start(camera)
+          const cameras = agent.config.read().cameras
+          if (cameras.length > 0) void agent.fleet.start(cameras)
           else showWindow()
         },
       },
@@ -122,11 +126,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showWindow)
 
   void app.whenReady().then(() => {
-    const spoolDir = paths.spool()
-    const agent = createAgent({ configFile: paths.config(), spoolDir }, publishStatus)
+    const spoolRoot = paths.spool()
+    const agent = createAgent({ configFile: paths.config(), spoolRoot }, publishStatus)
     state.agent = agent
 
-    registerIpc(agent, () => state.window, spoolDir)
+    registerIpc(agent, () => state.window, spoolRoot)
     state.window = createWindow()
     createTray()
 
@@ -134,8 +138,8 @@ if (!app.requestSingleInstanceLock()) {
     app.setLoginItemSettings({ openAtLogin: config.autoStart, openAsHidden: true })
 
     // 재부팅 후 사람 없이도 감시가 이어져야 한다. 무인매장에는 켜 줄 사람이 없다.
-    if (config.selectedCamera && config.backendBaseUrl) {
-      void agent.supervisor.start(config.selectedCamera)
+    if (config.cameras.length > 0 && config.backendBaseUrl) {
+      void agent.fleet.start(config.cameras)
     }
 
     app.on('activate', showWindow)
@@ -153,12 +157,12 @@ if (!app.requestSingleInstanceLock()) {
       defaultId: 0,
       cancelId: 0,
       title: '정말 종료할까요?',
-      message: '종료하면 CCTV 감시가 중단됩니다.',
+      message: `종료하면 카메라 ${state.status?.cameras.length ?? 0}대의 감시가 모두 중단됩니다.`,
       detail: '이상행동 감지가 멈추고, 종료된 동안의 영상은 분석되지 않습니다.',
     })
     if (choice !== 1) return
     state.quitting = true
-    void state.agent?.supervisor.stop().then(() => app.quit())
+    void state.agent?.fleet.stop().then(() => app.quit())
   })
 
   // 창을 다 닫아도 트레이에서 계속 돈다 (macOS 관례와 동일하게 모든 플랫폼에서)

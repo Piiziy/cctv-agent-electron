@@ -6,6 +6,7 @@ const base = {
   spoolDir: '/tmp/spool',
   segmentSeconds: 300,
   includeAudio: false,
+  alignToClock: false,
 }
 
 const joined = (o = base) => buildSegmentArgs(o).join(' ')
@@ -45,6 +46,14 @@ describe('buildSegmentArgs', () => {
 
   it('소켓 타임아웃을 건다 (응답 없는 카메라에 무한 대기 방지)', () => {
     expect(joined()).toContain('-timeout ')
+  })
+
+  it('벽시계 정렬을 켜면 -segment_atclocktime 이 들어간다', () => {
+    expect(joined({ ...base, alignToClock: true })).toContain('-segment_atclocktime 1')
+  })
+
+  it('벽시계 정렬을 끄면 그 옵션이 없다', () => {
+    expect(joined()).not.toContain('-segment_atclocktime')
   })
 
   it('오디오를 끄면 -an이 들어간다', () => {

@@ -242,12 +242,20 @@ export const startOnvifDevice = async (options: OnvifDeviceOptions): Promise<Onv
     return socket
   })()
 
+  const closed = { done: false }
+
   return {
     xaddr,
     uuid,
     port,
     close: async () => {
-      discovery?.close()
+      if (closed.done) return
+      closed.done = true
+      try {
+        discovery?.close()
+      } catch {
+        // 이미 닫혔다
+      }
       await new Promise<void>((resolve) => server.close(() => resolve()))
     },
   }

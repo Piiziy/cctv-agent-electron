@@ -31,6 +31,12 @@ export interface SegmentArgsInput {
   readonly spoolDir: string
   readonly segmentSeconds: number
   readonly includeAudio: boolean
+  /**
+   * 조각 경계를 벽시계에 맞출지.
+   * 켜면 카메라마다 시작 시각이 달라도 14:30, 14:35 처럼 같은 시각에 잘린다.
+   * 여러 카메라를 같은 구간끼리 나란히 놓고 볼 수 있게 하는 유일한 방법이다.
+   */
+  readonly alignToClock: boolean
 }
 
 export const partsDirOf = (spoolDir: string): string => join(spoolDir, PARTS_DIR)
@@ -55,6 +61,7 @@ export const buildSegmentArgs = (input: SegmentArgsInput): string[] => [
   '-c:v', 'copy',
   '-f', 'segment',
   '-segment_time', String(input.segmentSeconds),
+  ...(input.alignToClock ? ['-segment_atclocktime', '1'] : []),
   '-segment_format', 'mp4',
   '-reset_timestamps', '1',
   '-segment_list', manifestPathOf(input.spoolDir),

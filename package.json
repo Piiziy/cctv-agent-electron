@@ -13,7 +13,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
-    "test:e2e": "vitest run tests/e2e",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "fake-camera": "vite-node tools/fake-camera/cli.ts",
     "dist": "electron-vite build && electron-builder",
     "fake-camera:webcam": "vite-node tools/fake-camera/cli.ts -- --webcam"

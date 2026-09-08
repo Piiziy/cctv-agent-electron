@@ -58,10 +58,18 @@ export interface AgentConfig {
   readonly deviceId: string
   readonly segmentSeconds: number
   readonly streamProfile: StreamProfileKind
+  /** 보관 공간 총량. 카메라 수로 나누어 카메라마다 같은 몫을 준다. */
   readonly spoolLimitBytes: number
   readonly includeAudio: boolean
   readonly autoStart: boolean
-  readonly selectedCamera: SelectedCamera | null
+  /** 감시 중인 카메라들. 순서는 사용자가 고른 순서다. */
+  readonly cameras: readonly SelectedCamera[]
+  /**
+   * 조각 경계를 벽시계에 맞출지.
+   * 켜면 모든 카메라가 14:30, 14:35 처럼 같은 시각에 잘려서, AI 서버가
+   * 같은 구간의 여러 카메라를 그대로 나란히 놓고 볼 수 있다.
+   */
+  readonly alignToClock: boolean
 }
 
 /** 백엔드로 보내는 meta 파트. 이 모양이 곧 API 계약이다. */
@@ -107,19 +115,32 @@ export type UploadStatus =
   | 'auth-failed'
   | 'payload-too-large'
 
-export interface AgentStatus {
-  readonly running: boolean
+/** 카메라 한 대의 상태. 카메라마다 독립적으로 끊기고 복구된다. */
+export interface CameraRuntimeStatus {
+  readonly cameraId: string
+  readonly name: string
   readonly camera: CameraStatus
-  readonly upload: UploadStatus
   readonly uploadedCount: number
   readonly pendingCount: number
   readonly lastUploadAt: string | null
   readonly spoolBytes: number
-  readonly spoolLimitBytes: number
-  readonly bytesUploadedToday: number
   readonly lastError: string | null
   /** 상한 초과로 오래된 조각을 버린 적이 있는지. 화면에 경고를 남긴다. */
   readonly spoolEvicted: boolean
+}
+
+export interface AgentStatus {
+  readonly running: boolean
+  /**
+   * 업로드는 카메라별이 아니라 전체가 하나다.
+   * 매장 업링크를 아끼려고 한 번에 하나씩만 올리기 때문이다.
+   */
+  readonly upload: UploadStatus
+  readonly cameras: readonly CameraRuntimeStatus[]
+  readonly bytesUploadedToday: number
+  /** 카메라 한 대에 할당된 몫. 총량을 카메라 수로 나눈 값이다. */
+  readonly spoolLimitBytesPerCamera: number
+  readonly lastError: string | null
 }
 
 export const DEFAULT_CONFIG: Omit<AgentConfig, 'deviceId'> = {
@@ -131,7 +152,12 @@ export const DEFAULT_CONFIG: Omit<AgentConfig, 'deviceId'> = {
   spoolLimitBytes: 5 * 1024 ** 3,
   includeAudio: false,
   autoStart: true,
-  selectedCamera: null,
+  cameras: [],
+  alignToClock: true,
 }
+
+/** 카메라 한 대에 돌아가는 보관 몫. 총량을 카메라 수로 나눈다. */
+export const spoolLimitPerCamera = (totalBytes: number, cameraCount: number): number =>
+  Math.floor(totalBytes / Math.max(1, cameraCount))
 
 export const AGENT_VERSION = '1.0.0'

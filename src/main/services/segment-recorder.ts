@@ -140,6 +140,7 @@ export interface SegmentRecorderOptions {
   readonly spoolDir: string
   readonly segmentSeconds: number
   readonly includeAudio: boolean
+  readonly alignToClock: boolean
   readonly onSegment: (event: SegmentEvent) => void
   readonly onExit: (event: { code: number | null; stderr: string }) => void
   /** 영상이 흘러들어오기 시작한 순간. 조각 완성보다 훨씬 먼저 온다. */
@@ -236,6 +237,7 @@ export const createSegmentRecorder = (options: SegmentRecorderOptions): SegmentR
         spoolDir: options.spoolDir,
         segmentSeconds: options.segmentSeconds,
         includeAudio: options.includeAudio,
+        alignToClock: options.alignToClock,
       })
       const child = spawn(options.ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
       state.child = child

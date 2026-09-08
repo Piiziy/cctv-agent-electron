@@ -19,7 +19,35 @@ describe('ConfigStore', () => {
     expect(config.segmentSeconds).toBe(300)
     expect(config.streamProfile).toBe('sub')
     expect(config.spoolLimitBytes).toBe(5 * 1024 ** 3)
-    expect(config.selectedCamera).toBeNull()
+    expect(config.cameras).toEqual([])
+    expect(config.alignToClock).toBe(true)
+  })
+
+  it('예전 1대 설정(selectedCamera)을 여러 대 형식으로 옮긴다', () => {
+    const legacy = {
+      storeId: 'store-1',
+      selectedCamera: { id: 'urn:uuid:old', name: '계산대', rtspUri: 'rtsp://cam/sub' },
+    }
+    writeFileSync(file, JSON.stringify(legacy))
+    const config = createConfigStore(file).read()
+    expect(config.cameras).toHaveLength(1)
+    expect(config.cameras[0]!.name).toBe('계산대')
+    expect('selectedCamera' in config).toBe(false)
+  })
+
+  it('예전 설정에 카메라가 없으면 빈 목록이 된다', () => {
+    writeFileSync(file, JSON.stringify({ storeId: 'store-1', selectedCamera: null }))
+    expect(createConfigStore(file).read().cameras).toEqual([])
+  })
+
+  it('카메라 목록을 통째로 갈아끼운다', () => {
+    const store = createConfigStore(file)
+    const cams = [
+      { id: 'a', name: '계산대' },
+      { id: 'b', name: '출입문' },
+    ] as never
+    store.write({ cameras: cams })
+    expect(createConfigStore(file).read().cameras.map((c) => c.name)).toEqual(['계산대', '출입문'])
   })
 
   it('deviceId를 자동 생성한다', () => {

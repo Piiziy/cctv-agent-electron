@@ -3,37 +3,38 @@ import { ulid } from 'ulid'
 import type { AgentStatus } from '../../shared/types'
 import { resolveFfmpegPath } from '../lib/ffmpeg'
 import { createConfigStore, type ConfigStore } from './config-store'
+import { createFleet, type Fleet } from './fleet'
 import { probeMedia } from './media-probe'
 import { createSegmentRecorder } from './segment-recorder'
 import { createSpoolStore } from './spool-store'
-import { createSupervisor, type Supervisor } from './supervisor'
 import { uploadSegment } from './uploader'
 
 export interface AgentPaths {
   readonly configFile: string
-  readonly spoolDir: string
+  /** 카메라마다 이 아래에 자기 폴더를 갖는다. */
+  readonly spoolRoot: string
 }
 
 export interface Agent {
-  readonly supervisor: Supervisor
+  readonly fleet: Fleet
   readonly config: ConfigStore
 }
 
 /**
  * 실제 의존성을 물린 에이전트를 만든다.
  *
- * Supervisor 는 모든 협력자를 주입받으므로, 테스트는 이 조립 함수를 건너뛰고
+ * Fleet 은 모든 협력자를 주입받으므로, 테스트는 이 조립 함수를 건너뛰고
  * 가짜를 넣을 수 있다. 여기 있는 것은 오직 "무엇을 쓸지" 뿐이다.
  */
 export const createAgent = (paths: AgentPaths, onStatus: (status: AgentStatus) => void): Agent => {
   const config = createConfigStore(paths.configFile)
   const ffmpegPath = resolveFfmpegPath()
 
-  const supervisor = createSupervisor({
+  const fleet = createFleet({
     config,
-    spool: createSpoolStore(paths.spoolDir, config.read().spoolLimitBytes),
-    spoolDir: paths.spoolDir,
+    spoolRoot: paths.spoolRoot,
     createRecorder: (args) => createSegmentRecorder({ ffmpegPath, ...args }),
+    createSpool: (dir, limitBytes) => createSpoolStore(dir, limitBytes),
     upload: uploadSegment,
     probeMedia: (path) => probeMedia(path),
     newSegmentId: () => ulid(),
@@ -42,5 +43,5 @@ export const createAgent = (paths: AgentPaths, onStatus: (status: AgentStatus) =
     onStatus,
   })
 
-  return { supervisor, config }
+  return { fleet, config }
 }

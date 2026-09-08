@@ -1,47 +1,41 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { cameraKey } from '../../src/main/lib/camera-key'
+import type { RecorderFactoryArgs } from '../../src/main/services/camera-worker'
 import { createConfigStore } from '../../src/main/services/config-store'
-import { createSpoolStore } from '../../src/main/services/spool-store'
-import { createSupervisor, type RecorderFactoryArgs, type Supervisor } from '../../src/main/services/supervisor'
+import { createFleet, type Fleet } from '../../src/main/services/fleet'
 import type { ProbedMedia } from '../../src/main/services/media-probe'
+import { createSpoolStore } from '../../src/main/services/spool-store'
 import type { UploadArgs, UploadResult } from '../../src/main/services/uploader'
 import type { AgentStatus, SegmentMeta, SelectedCamera } from '../../src/shared/types'
 
-export const CAMERA: SelectedCamera = {
-  id: 'urn:uuid:cam-01',
-  name: '계산대',
-  manufacturer: 'Hikvision',
-  model: 'DS-2CD2143G2',
-  rtspUri: 'rtsp://admin:pw@192.168.0.64/Streaming/Channels/102',
+export const makeCamera = (id: string, name: string): SelectedCamera => ({
+  id,
+  name,
+  manufacturer: 'FakeCam',
+  model: 'SIM-1000',
+  rtspUri: `rtsp://admin:pw@127.0.0.1/${id}`,
   streamProfile: 'sub',
   codec: 'h264',
-  width: 704,
+  width: 640,
   height: 480,
   fps: 15,
-}
+})
 
 const PROBED: ProbedMedia = {
-  codec: 'h264',
-  width: 704,
-  height: 480,
-  fps: 15,
-  durationMs: 5000,
-  sizeBytes: 100,
+  codec: 'h264', width: 640, height: 480, fps: 15, durationMs: 5000, sizeBytes: 100,
 }
 
 export interface Harness {
-  readonly supervisor: Supervisor
+  readonly fleet: Fleet
   readonly uploads: SegmentMeta[]
   readonly statuses: AgentStatus[]
-  readonly spoolDir: string
-  /** 조각 파일을 만들고 recorder 가 완성 이벤트를 낸 것처럼 흉내낸다. */
-  emitSegment(name: string, bytes?: number): void
-  /** 영상이 흘러들어오기 시작한 것처럼 흉내낸다 (조각 완성 이전). */
-  emitFlowing(): void
-  /** ffmpeg 프로세스가 죽은 것처럼 흉내낸다. */
-  emitExit(stderr?: string): void
-  recorderStarts(): number
+  spoolDirOf(cameraId: string): string
+  emitSegment(cameraId: string, name: string, bytes?: number): void
+  emitFlowing(cameraId: string): void
+  emitExit(cameraId: string, stderr?: string): void
+  recorderStarts(cameraId: string): number
   setUploadResults(results: UploadResult[]): void
   setProbeResult(result: ProbedMedia | null): void
   cleanup(): void
@@ -50,22 +44,19 @@ export interface Harness {
 export const makeHarness = (
   options: { spoolLimitBytes?: number; stallTimeoutMs?: number } = {},
 ): Harness => {
-  const dir = mkdtempSync(join(tmpdir(), 'cctv-sup-'))
-  const spoolDir = join(dir, 'spool')
-  // 실제 SegmentRecorder 는 start() 에서 스풀 디렉토리를 만든다. 가짜 recorder 도 같게 맞춘다.
-  mkdirSync(spoolDir, { recursive: true })
+  const dir = mkdtempSync(join(tmpdir(), 'cctv-fleet-'))
+  const spoolRoot = join(dir, 'spool')
   const config = createConfigStore(join(dir, 'config.json'))
   config.write({
     backendBaseUrl: 'http://backend.test',
     deviceToken: 'tok',
     storeId: 'store-1',
     segmentSeconds: 5,
+    spoolLimitBytes: options.spoolLimitBytes ?? 10 * 1024 * 1024,
   })
-  const spool = createSpoolStore(spoolDir, options.spoolLimitBytes ?? 10 * 1024 * 1024)
 
+  const recorders = new Map<string, { args: RecorderFactoryArgs; starts: number }>()
   const state = {
-    recorderArgs: null as RecorderFactoryArgs | null,
-    starts: 0,
     uploadResults: [] as UploadResult[],
     probeResult: PROBED as ProbedMedia | null,
     idCounter: 0,
@@ -73,27 +64,34 @@ export const makeHarness = (
   const uploads: SegmentMeta[] = []
   const statuses: AgentStatus[] = []
 
-  const supervisor = createSupervisor({
+  const dirOf = (cameraId: string): string => join(spoolRoot, cameraKey(cameraId))
+  const byUri = (cameraId: string) => recorders.get(dirOf(cameraId))
+
+  const fleet = createFleet({
     config,
-    spool,
-    spoolDir,
+    spoolRoot,
     createRecorder: (args) => {
-      state.recorderArgs = args
+      // 실제 SegmentRecorder 는 start() 에서 스풀 폴더를 만든다. 가짜도 같게 맞춘다.
+      mkdirSync(args.spoolDir, { recursive: true })
+      const existing = recorders.get(args.spoolDir)
+      const entry = { args, starts: existing?.starts ?? 0 }
+      recorders.set(args.spoolDir, entry)
       return {
         start: () => {
-          state.starts += 1
+          entry.starts += 1
         },
         stop: async () => {},
         isRunning: () => true,
       }
     },
+    createSpool: (d, limit) => createSpoolStore(d, limit),
     upload: async ({ meta }: UploadArgs) => {
       uploads.push(meta)
       return state.uploadResults.shift() ?? { kind: 'ok' }
     },
     probeMedia: async () => state.probeResult,
     newSegmentId: () => `seg-id-${state.idCounter++}`,
-    now: () => new Date('2026-09-07T05:30:00.000Z'),
+    now: () => new Date('2026-09-08T05:30:00.000Z'),
     delay: (ms) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5))),
     onStatus: (status) => statuses.push(status),
     idleMs: 5,
@@ -101,22 +99,19 @@ export const makeHarness = (
   })
 
   return {
-    supervisor,
+    fleet,
     uploads,
     statuses,
-    spoolDir,
-    emitSegment: (name, bytes = 100) => {
-      const path = join(spoolDir, name)
+    spoolDirOf: dirOf,
+    emitSegment: (cameraId, name, bytes = 100) => {
+      const path = join(dirOf(cameraId), name)
       writeFileSync(path, Buffer.alloc(bytes, 1))
-      state.recorderArgs?.onSegment({ name, path })
+      byUri(cameraId)?.args.onSegment({ name, path })
     },
-    emitFlowing: () => {
-      state.recorderArgs?.onFlowing()
-    },
-    emitExit: (stderr = 'Connection timed out') => {
-      state.recorderArgs?.onExit({ code: 1, stderr })
-    },
-    recorderStarts: () => state.starts,
+    emitFlowing: (cameraId) => byUri(cameraId)?.args.onFlowing(),
+    emitExit: (cameraId, stderr = 'Connection timed out') =>
+      byUri(cameraId)?.args.onExit({ code: 1, stderr }),
+    recorderStarts: (cameraId) => byUri(cameraId)?.starts ?? 0,
     setUploadResults: (results) => {
       state.uploadResults = [...results]
     },
@@ -127,11 +122,6 @@ export const makeHarness = (
   }
 }
 
-/**
- * 조건이 만족될 때까지 폴링한다.
- * 기본 대기가 넉넉한 이유: ffmpeg 가 도는 동안에는 CPU 경합으로 비동기 루프가
- * 밀려서, 빠듯한 대기 시간은 로직이 아니라 부하 때문에 실패한다.
- */
 export const waitFor = async (
   predicate: () => boolean | Promise<boolean>,
   { timeoutMs = 15_000, stepMs = 5 } = {},
