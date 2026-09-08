@@ -5,6 +5,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
+import { inputArgs, type CameraSource } from './source'
 
 /**
  * 최소 RTSP 서버 — 진짜 IP 카메라를 대신한다.
@@ -21,7 +22,7 @@ import { randomBytes } from 'node:crypto'
 export interface StreamSpec {
   /** RTSP 경로. 예: 'main' → rtsp://host:port/main */
   readonly path: string
-  readonly sourceFile: string
+  readonly source: CameraSource
   readonly width: number
   readonly height: number
   readonly fps: number
@@ -84,7 +85,7 @@ const startStream = async (spec: StreamSpec, ffmpegPath: string): Promise<LiveSt
 
   const args = [
     '-hide_banner', '-loglevel', 'error', '-nostdin',
-    '-re', '-stream_loop', '-1', '-i', spec.sourceFile,
+    ...inputArgs(spec.source, { width: spec.width, height: spec.height, fps: spec.fps }),
     '-an',
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
@@ -102,6 +103,10 @@ const startStream = async (spec: StreamSpec, ffmpegPath: string): Promise<LiveSt
     `rtp://127.0.0.1:${rtpPort}`,
   ]
   const ffmpeg = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+  const diagnostics = { stderr: '' }
+  ffmpeg.stderr?.on('data', (chunk: Buffer) => {
+    diagnostics.stderr = `${diagnostics.stderr}${chunk.toString()}`.slice(-4000)
+  })
 
   // SDP 파일은 ffmpeg 가 헤더를 쓰는 시점에 생성된다. 잠깐 기다렸다 읽는다.
   const sdp = await (async () => {
@@ -114,7 +119,16 @@ const startStream = async (spec: StreamSpec, ffmpegPath: string): Promise<LiveSt
       }
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    throw new Error(`ffmpeg 가 SDP 를 만들지 못했습니다 (${spec.path})`)
+    const hint =
+      spec.source.kind === 'webcam'
+        ? '\n\n웹캠이 열리지 않았습니다. macOS 라면 시스템 설정 → 개인정보 보호 및 보안 → ' +
+          '카메라 에서 이 명령을 실행한 터미널 앱을 허용했는지 확인하세요. ' +
+          '권한이 없으면 ffmpeg 가 프레임을 한 장도 받지 못한 채 멈춥니다.'
+        : ''
+    throw new Error(
+      `ffmpeg 가 SDP 를 만들지 못했습니다 (${spec.path})\n` +
+        `${diagnostics.stderr.trim() || '(stderr 없음)'}${hint}`,
+    )
   })()
   rmSync(sdpPath, { force: true })
 

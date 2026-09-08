@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { resolveFfmpegPath } from '../../src/main/lib/ffmpeg'
 import { startOnvifDevice, type OnvifProfileSpec } from './onvif-responder'
 import { startRtspServer, type StreamSpec } from './rtsp-server'
+import { defaultWebcamDevice, type CameraSource } from './source'
 
 const execFileAsync = promisify(execFile)
 
@@ -20,6 +21,11 @@ const execFileAsync = promisify(execFile)
 
 export interface FakeCameraOptions {
   readonly host?: string
+  /**
+   * 영상 입력. 생략하면 생성된 테스트 영상 파일을 쓴다.
+   * 'webcam' 을 주면 노트북 카메라를 CCTV 인 척 내보낸다.
+   */
+  readonly source?: CameraSource | 'webcam'
   readonly sourceFile?: string
   readonly gopSeconds?: number
   readonly manufacturer?: string
@@ -38,7 +44,7 @@ export interface FakeCamera {
   close(): Promise<void>
 }
 
-const STREAMS: readonly Omit<StreamSpec, 'sourceFile' | 'gopSeconds'>[] = [
+const STREAMS: readonly Omit<StreamSpec, 'source' | 'gopSeconds'>[] = [
   { path: 'main', width: 1280, height: 720, fps: 15, bitrateKbps: 2000 },
   { path: 'sub', width: 640, height: 480, fps: 15, bitrateKbps: 400 },
 ]
@@ -60,19 +66,29 @@ export const ensureTestVideo = async (
   return path
 }
 
+const resolveSource = async (options: FakeCameraOptions): Promise<CameraSource> => {
+  if (options.source === 'webcam') return { kind: 'webcam', device: defaultWebcamDevice() }
+  if (options.source) return options.source
+  return { kind: 'file', path: await ensureTestVideo(options.sourceFile ?? '.tmp/fake-camera-source.mp4') }
+}
+
 export const startFakeCamera = async (options: FakeCameraOptions = {}): Promise<FakeCamera> => {
   const host = options.host ?? '127.0.0.1'
   const gopSeconds = options.gopSeconds ?? 1
-  const sourceFile = await ensureTestVideo(options.sourceFile ?? '.tmp/fake-camera-source.mp4')
+  const source = await resolveSource(options)
+
+  // 웹캠은 장치를 동시에 두 번 열 수 없는 환경이 있어 스트림 하나만 낸다.
+  // 파일 입력은 메인/서브 두 갈래를 모두 내보내 진짜 카메라와 같은 모양을 만든다.
+  const streams = source.kind === 'webcam' ? STREAMS.filter((s) => s.path === 'sub') : STREAMS
 
   const rtsp = await startRtspServer({
     ffmpegPath: resolveFfmpegPath(),
     host,
     ...(options.rtspPort === undefined ? {} : { port: options.rtspPort }),
-    streams: STREAMS.map((stream) => ({ ...stream, sourceFile, gopSeconds })),
+    streams: streams.map((stream) => ({ ...stream, source, gopSeconds })),
   })
 
-  const profiles: OnvifProfileSpec[] = STREAMS.map((stream) => ({
+  const profiles: OnvifProfileSpec[] = streams.map((stream) => ({
     token: stream.path,
     name: `${stream.path}Stream`,
     rtspUri: rtsp.urls[stream.path]!,

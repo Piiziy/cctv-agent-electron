@@ -15,7 +15,8 @@
     "test:unit": "vitest run tests/unit",
     "test:e2e": "vitest run tests/e2e",
     "fake-camera": "vite-node tools/fake-camera/cli.ts",
-    "dist": "electron-vite build && electron-builder"
+    "dist": "electron-vite build && electron-builder",
+    "fake-camera:webcam": "vite-node tools/fake-camera/cli.ts -- --webcam"
   },
   "dependencies": {
     "ffmpeg-static": "^5.2.0",
