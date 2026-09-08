@@ -11,6 +11,8 @@ export const IPC = {
   probe: 'agent:probe',
   probeRtsp: 'agent:probe-rtsp',
   snapshot: 'agent:snapshot',
+  previewStart: 'agent:preview-start',
+  previewStop: 'agent:preview-stop',
   start: 'agent:start',
   stop: 'agent:stop',
   getConfig: 'agent:get-config',
@@ -32,6 +34,10 @@ export type DiscoverResult =
   | { readonly ok: true; readonly cameras: readonly DiscoveredCamera[] }
   | { readonly ok: false; readonly message: string }
 
+export type PreviewResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly message: string }
+
 export type SnapshotResult =
   | { readonly ok: true; readonly dataUrl: string }
   | { readonly ok: false; readonly message: string }
@@ -48,6 +54,9 @@ export interface AgentApi {
   /** ONVIF 검색에 안 잡히는 카메라를 위한 수동 경로. RTSP 주소를 직접 조사한다. */
   probeRtsp(rtspUri: string): Promise<ProbeResult>
   snapshot(rtspUri: string): Promise<SnapshotResult>
+  /** 실시간 미리보기 스트림을 켜고 <img src> 에 넣을 URL 을 받는다. */
+  previewStart(rtspUri: string): Promise<PreviewResult>
+  previewStop(): Promise<void>
   start(camera: SelectedCamera): Promise<void>
   stop(): Promise<void>
   getConfig(): Promise<AgentConfig>

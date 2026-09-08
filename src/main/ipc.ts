@@ -3,12 +3,21 @@ import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ipcMain, shell, type BrowserWindow } from 'electron'
-import { IPC, type DiscoverResult, type ProbeArgs, type ProbeResult, type SnapshotResult } from '../shared/ipc'
+import {
+  IPC,
+  type DiscoverResult,
+  type PreviewResult,
+  type ProbeArgs,
+  type ProbeResult,
+  type SnapshotResult,
+} from '../shared/ipc'
 import type { AgentConfig, AgentStatus, SelectedCamera } from '../shared/types'
+import { resolveFfmpegPath } from './lib/ffmpeg'
 import type { Agent } from './services/agent'
 import { classifyProfiles, isAuthFailure, probeCamera } from './services/camera-probe'
 import { discoverCameras } from './services/discovery'
 import { probeMedia } from './services/media-probe'
+import { createPreviewService } from './services/preview-stream'
 import { captureSnapshot } from './services/snapshot'
 
 const toProbeFailure = (error: unknown): ProbeResult => {
@@ -30,6 +39,18 @@ const toProbeFailure = (error: unknown): ProbeResult => {
 }
 
 export const registerIpc = (agent: Agent, getWindow: () => BrowserWindow | null, spoolDir: string): void => {
+  const preview = createPreviewService({ ffmpegPath: resolveFfmpegPath() })
+
+  ipcMain.handle(IPC.previewStart, async (_event, rtspUri: string): Promise<PreviewResult> => {
+    try {
+      return { ok: true, url: await preview.start(rtspUri) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle(IPC.previewStop, () => preview.stop())
+
   ipcMain.handle(IPC.discover, async (_event, timeoutMs?: number): Promise<DiscoverResult> => {
     try {
       return { ok: true, cameras: await discoverCameras(timeoutMs ?? 5000) }

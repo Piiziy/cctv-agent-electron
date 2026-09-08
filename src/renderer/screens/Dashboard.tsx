@@ -1,6 +1,6 @@
 import type { AgentConfig, AgentStatus, CameraStatus, UploadStatus } from '../../shared/types'
 import { Button, Card, Notice, Pill, Spinner, Stat } from '../components/ui'
-import { useSnapshot } from '../hooks/useSnapshot'
+import { usePreview } from '../hooks/usePreview'
 import { api } from '../lib/api'
 import { formatBytes, formatRelativeTime, formatSegmentLength } from '../lib/format'
 
@@ -30,7 +30,7 @@ interface Props {
 
 export const Dashboard = ({ status, config, onStop, onChangeCamera }: Props) => {
   const camera = config.selectedCamera
-  const preview = useSnapshot(status.running ? (camera?.rtspUri ?? null) : null, 5000)
+  const preview = usePreview(status.running ? (camera?.rtspUri ?? null) : null)
   const cameraState = CAMERA_LABEL[status.camera]
   const uploadState = UPLOAD_LABEL[status.upload]
 
@@ -76,8 +76,8 @@ export const Dashboard = ({ status, config, onStop, onChangeCamera }: Props) => 
       <div className="grid gap-4 sm:grid-cols-[1.4fr_1fr]">
         <Card className="overflow-hidden">
           <div className="flex aspect-video items-center justify-center bg-slate-900">
-            {preview.dataUrl ? (
-              <img src={preview.dataUrl} alt="현재 화면" className="size-full object-contain" />
+            {preview.url ? (
+              <img src={preview.url} alt="현재 화면" className="size-full object-contain" />
             ) : (
               <span className="flex items-center gap-2 text-sm text-slate-400">
                 {status.running ? (

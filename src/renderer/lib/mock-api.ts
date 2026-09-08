@@ -113,6 +113,11 @@ export const createMockApi = (): AgentApi => {
       await delay(300)
       return { ok: true, dataUrl: PLACEHOLDER }
     },
+    previewStart: async () => {
+      await delay(300)
+      return { ok: true as const, url: PLACEHOLDER }
+    },
+    previewStop: async () => undefined,
     start: async (camera) => {
       store.config = { ...store.config, selectedCamera: camera }
       publish({ running: true, camera: 'connecting', upload: 'idle' })

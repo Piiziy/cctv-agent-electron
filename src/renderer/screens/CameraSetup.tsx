@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ProbeResult } from '../../shared/ipc'
 import type { SelectedCamera, StreamProfile } from '../../shared/types'
 import { Button, Card, Field, Notice, Spinner } from '../components/ui'
-import { useSnapshot } from '../hooks/useSnapshot'
+import { usePreview } from '../hooks/usePreview'
 import { api } from '../lib/api'
 import { cn } from '../lib/cn'
 import { formatDailyUsage, formatResolution } from '../lib/format'
@@ -35,7 +35,7 @@ export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onStart }: 
 
   const profiles: readonly StreamProfile[] = result?.ok ? result.profiles : []
   const selected = profiles.find((profile) => profile.token === selectedToken) ?? null
-  const preview = useSnapshot(selected?.rtspUri ?? null)
+  const preview = usePreview(selected?.rtspUri ?? null)
 
   const probe = async (): Promise<void> => {
     setProbing(true)
@@ -135,12 +135,8 @@ export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onStart }: 
         <>
           <Card className="overflow-hidden">
             <div className="flex aspect-video items-center justify-center bg-slate-900">
-              {preview.dataUrl ? (
-                <img
-                  src={preview.dataUrl}
-                  alt="카메라 미리보기"
-                  className="size-full object-contain"
-                />
+              {preview.url ? (
+                <img src={preview.url} alt="카메라 미리보기" className="size-full object-contain" />
               ) : (
                 <span className="flex items-center gap-2 text-sm text-slate-400">
                   {preview.error ? preview.error : <><Spinner /> 화면을 불러오는 중…</>}
@@ -148,7 +144,7 @@ export const CameraSetup = ({ choice, initialSegmentSeconds, onBack, onStart }: 
               )}
             </div>
             <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
-              2초마다 갱신됩니다. 계산대·출입문 등 원하는 화면이 맞는지 확인하세요.
+              실시간 화면입니다. 계산대·출입문 등 원하는 곳이 맞는지 확인하세요.
             </p>
           </Card>
 
