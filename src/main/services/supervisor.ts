@@ -291,6 +291,9 @@ export const createSupervisor = (deps: SupervisorDeps): Supervisor => {
   function handleFlowing(): void {
     if (!state.running) return
     state.recorderAttempt = 0
+    // 복구에 성공했으므로 이전 실패 기록을 지운다.
+    // 남겨두면 멀쩡히 도는 중에도 화면 하단에 옛날 오류가 계속 떠 있다.
+    state.lastError = null
     setCameraStatus('streaming')
   }
 

@@ -154,6 +154,14 @@ describe('Supervisor — 카메라 복구', () => {
     expect(harness.recorderStarts()).toBe(1)
   })
 
+  it('복구되면 이전 오류 기록을 지운다 (멀쩡한데 옛 오류가 남아 보이면 안 된다)', async () => {
+    await start()
+    harness.emitExit('Connection refused')
+    await waitFor(() => harness.supervisor.status().lastError !== null)
+    harness.emitFlowing()
+    await waitFor(() => harness.supervisor.status().lastError === null)
+  })
+
   it('조각이 완성되기 전에도 영상이 들어오면 streaming 이 된다', async () => {
     await start()
     expect(harness.supervisor.status().camera).toBe('connecting')
