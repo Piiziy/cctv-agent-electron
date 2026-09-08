@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { open, readdir, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { buildSegmentArgs, manifestPathOf, partsDirOf } from '../lib/segment-args'
@@ -155,6 +155,21 @@ export interface SegmentRecorder {
 
 const KILL_GRACE_MS = 3000
 
+/** 보관 폴더를 연 사람이 헷갈리지 않도록 남기는 안내문. */
+const SPOOL_README = [
+  '이 폴더에는 아직 서버로 보내지 못한 영상 조각이 담깁니다.',
+  '',
+  '  seg_20260908_143005_123.mp4   완성된 조각입니다. 그대로 재생할 수 있습니다.',
+  '                                 서버로 보내지면 자동으로 사라집니다.',
+  '',
+  '  .writing/                     지금 녹화되고 있는 조각이 들어있는 임시 폴더입니다.',
+  '                                 여기 있는 파일은 아직 다 쓰이지 않아 재생하면',
+  '                                 화면이 멈춘 것처럼 보입니다. 고장이 아닙니다.',
+  '                                 다 쓰이면 위 이름으로 바뀌어 올라옵니다.',
+  '',
+  '이 폴더가 비어 있다면 모든 영상이 정상적으로 전송된 것입니다.',
+].join('\n')
+
 /**
  * 완성된 조각을 parts/ 에서 스풀 루트로 옮긴다.
  *
@@ -207,6 +222,8 @@ export const createSegmentRecorder = (options: SegmentRecorderOptions): SegmentR
 
     start: () => {
       if (state.child) return
+      mkdirSync(options.spoolDir, { recursive: true })
+      writeFileSync(join(options.spoolDir, '읽어보세요.txt'), SPOOL_README, 'utf8')
       mkdirSync(partsDir, { recursive: true })
       // 이전 실행이 남긴 미완성 조각은 버린다. 완성된 것은 이미 스풀 루트로 옮겨졌다.
       rmSync(partsDir, { recursive: true, force: true })

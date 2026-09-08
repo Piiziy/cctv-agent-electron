@@ -6,8 +6,12 @@ import { join } from 'node:path'
  * 완성된 조각과 물리적으로 분리하는 것이 핵심이다. 한 디렉토리에 섞어두면
  * "지금 쓰이고 있는 파일"과 "다 쓴 파일"을 구분할 방법이 없어 미완성 조각을
  * 업로드하게 된다. 완성 신호(manifest)를 받은 뒤 스풀 루트로 옮긴다.
+ *
+ * 이름 앞의 점은 의도적이다. 쓰는 중인 mp4 는 색인(moov atom)이 아직 없어서
+ * 재생하면 앞부분이 정지 화면으로 보인다. 사용자가 보관 폴더를 열었다가
+ * 그 파일을 재생하고 고장난 줄 아는 일을 막는다.
  */
-export const PARTS_DIR = 'parts'
+export const PARTS_DIR = '.writing'
 
 /** ffmpeg 가 조각을 닫을 때마다 파일명 한 줄을 추가하는 목록 파일. */
 export const MANIFEST_NAME = 'manifest.txt'
