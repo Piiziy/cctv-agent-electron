@@ -10,7 +10,13 @@ export interface CameraChoice {
   readonly rtspUri: string
 }
 
-export const CameraSelect = ({ onChoose }: { onChoose: (choice: CameraChoice) => void }) => {
+interface Props {
+  readonly onChoose: (choice: CameraChoice) => void
+  /** 이미 감시 중인 카메라가 있을 때만 준다. 없으면 돌아갈 곳이 없다. */
+  readonly onCancel: (() => void) | null
+}
+
+export const CameraSelect = ({ onChoose, onCancel }: Props) => {
   const [cameras, setCameras] = useState<readonly DiscoveredCamera[]>([])
   const [failure, setFailure] = useState<string | null>(null)
   const [scanning, setScanning] = useState(true)
@@ -32,15 +38,22 @@ export const CameraSelect = ({ onChoose }: { onChoose: (choice: CameraChoice) =>
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
       <header className="flex items-end justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">매장 카메라 연결</h1>
+        <div className="flex items-end gap-2">
+          {onCancel && (
+            <Button tone="ghost" onClick={onCancel} className="mb-0.5 px-2" aria-label="뒤로">
+              ←
+            </Button>
+          )}
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">매장 카메라 연결</h1>
           <p className="mt-1 text-sm text-slate-500">
             {scanning
             ? '주변 카메라를 찾는 중입니다…'
             : failure
               ? '검색을 실행하지 못했습니다'
               : `카메라 ${cameras.length}대를 찾았습니다`}
-          </p>
+            </p>
+          </div>
         </div>
         <Button onClick={() => void scan()} disabled={scanning}>
           {scanning ? <Spinner /> : null}

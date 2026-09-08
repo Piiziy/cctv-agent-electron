@@ -96,6 +96,7 @@ export const App = () => {
               setChoice(next)
               setScreen('setup')
             }}
+            onCancel={config.selectedCamera ? () => setScreen('dashboard') : null}
           />
         )}
 
