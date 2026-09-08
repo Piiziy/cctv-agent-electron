@@ -161,6 +161,7 @@ Idempotency-Key: <segmentId>
 
 ## 문서
 
+- [프로토콜 흐름과 API 명세](docs/protocol-flow.md) — 단계별 프로토콜 사용법 + 백엔드 요청 규격
 - [설계 문서](docs/superpowers/specs/2026-09-07-cctv-ingest-agent-design.md) — 프로토콜 조사, 아키텍처, 결정 근거
 - [구현 계획서](docs/superpowers/plans/2026-09-07-cctv-ingest-agent.md)
 
