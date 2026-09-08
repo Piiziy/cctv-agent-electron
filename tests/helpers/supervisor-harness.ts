@@ -37,6 +37,8 @@ export interface Harness {
   readonly spoolDir: string
   /** 조각 파일을 만들고 recorder 가 완성 이벤트를 낸 것처럼 흉내낸다. */
   emitSegment(name: string, bytes?: number): void
+  /** 영상이 흘러들어오기 시작한 것처럼 흉내낸다 (조각 완성 이전). */
+  emitFlowing(): void
   /** ffmpeg 프로세스가 죽은 것처럼 흉내낸다. */
   emitExit(stderr?: string): void
   recorderStarts(): number
@@ -107,6 +109,9 @@ export const makeHarness = (
       const path = join(spoolDir, name)
       writeFileSync(path, Buffer.alloc(bytes, 1))
       state.recorderArgs?.onSegment({ name, path })
+    },
+    emitFlowing: () => {
+      state.recorderArgs?.onFlowing()
     },
     emitExit: (stderr = 'Connection timed out') => {
       state.recorderArgs?.onExit({ code: 1, stderr })

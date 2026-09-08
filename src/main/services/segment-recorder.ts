@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdirSync, rmSync, statSync } from 'node:fs'
-import { open, rename, stat } from 'node:fs/promises'
+import { open, readdir, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { buildSegmentArgs, manifestPathOf, partsDirOf } from '../lib/segment-args'
 import { formatSegmentName } from './spool-store'
@@ -90,6 +90,50 @@ export const createManifestWatcher = (options: ManifestWatcherOptions): Manifest
   }
 }
 
+export interface FlowDetectorOptions {
+  readonly partsDir: string
+  readonly onFlowing: () => void
+  readonly pollMs?: number
+}
+
+/**
+ * "영상이 실제로 흘러들어오고 있다"를 조각이 완성되기 전에 알아낸다.
+ *
+ * 조각 완성만으로 연결 여부를 판단하면, 5분 조각 설정에서는 화면이 5분 내내
+ * '연결 중'으로 남는다. 영상이 멀쩡히 나오는데도 고장난 것처럼 보인다.
+ * ffmpeg 가 쓰고 있는 파일에 바이트가 생기는 순간이 곧 스트림이 살아있다는 증거다.
+ */
+export const createFlowDetector = (options: FlowDetectorOptions): ManifestWatcher => {
+  const pollMs = options.pollMs ?? 500
+  const state = { running: false, timer: null as NodeJS.Timeout | null }
+
+  const stop = (): void => {
+    state.running = false
+    if (state.timer) clearInterval(state.timer)
+    state.timer = null
+  }
+
+  const tick = async (): Promise<void> => {
+    if (!state.running) return
+    const names = await readdir(options.partsDir).catch(() => [] as string[])
+    const parts = names.filter((name) => /^part_\d+\.mp4$/.test(name))
+    const sizes = await Promise.all(
+      parts.map(async (name) => (await stat(join(options.partsDir, name)).catch(() => null))?.size ?? 0),
+    )
+    if (!state.running || !sizes.some((size) => size > 0)) return
+    stop()
+    options.onFlowing()
+  }
+
+  return {
+    start: () => {
+      state.running = true
+      state.timer = setInterval(() => void tick(), pollMs)
+    },
+    stop,
+  }
+}
+
 export interface SegmentRecorderOptions {
   readonly ffmpegPath: string
   readonly rtspUri: string
@@ -98,6 +142,8 @@ export interface SegmentRecorderOptions {
   readonly includeAudio: boolean
   readonly onSegment: (event: SegmentEvent) => void
   readonly onExit: (event: { code: number | null; stderr: string }) => void
+  /** 영상이 흘러들어오기 시작한 순간. 조각 완성보다 훨씬 먼저 온다. */
+  readonly onFlowing?: () => void
   readonly pollMs?: number
 }
 
@@ -150,6 +196,12 @@ export const createSegmentRecorder = (options: SegmentRecorderOptions): SegmentR
     ...(options.pollMs === undefined ? {} : { pollMs: options.pollMs }),
   })
 
+  const flowDetector = createFlowDetector({
+    partsDir,
+    onFlowing: () => options.onFlowing?.(),
+    ...(options.pollMs === undefined ? {} : { pollMs: options.pollMs }),
+  })
+
   return {
     isRunning: () => state.child !== null,
 
@@ -179,21 +231,25 @@ export const createSegmentRecorder = (options: SegmentRecorderOptions): SegmentR
       child.on('exit', (code) => {
         state.child = null
         watcher.stop()
+        flowDetector.stop()
         if (!state.stopping) options.onExit({ code, stderr: state.stderr })
       })
 
       child.on('error', (error) => {
         state.child = null
         watcher.stop()
+        flowDetector.stop()
         if (!state.stopping) options.onExit({ code: null, stderr: `${state.stderr}\n${error.message}` })
       })
 
       watcher.start()
+      flowDetector.start()
     },
 
     stop: async () => {
       state.stopping = true
       watcher.stop()
+      flowDetector.stop()
       const child = state.child
       if (!child) return
       await new Promise<void>((resolve) => {

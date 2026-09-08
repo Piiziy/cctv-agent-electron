@@ -20,6 +20,8 @@ export interface RecorderFactoryArgs {
   readonly includeAudio: boolean
   readonly onSegment: (event: SegmentEvent) => void
   readonly onExit: (event: { code: number | null; stderr: string }) => void
+  /** 영상이 흘러들어오기 시작한 순간. 조각 완성을 기다리지 않는다. */
+  readonly onFlowing: () => void
 }
 
 export interface SupervisorDeps {
@@ -265,6 +267,7 @@ export const createSupervisor = (deps: SupervisorDeps): Supervisor => {
       includeAudio: config.includeAudio,
       onSegment: handleSegment,
       onExit: handleExit,
+      onFlowing: handleFlowing,
     })
     setCameraStatus('connecting')
     state.recorder.start()
@@ -279,6 +282,16 @@ export const createSupervisor = (deps: SupervisorDeps): Supervisor => {
     state.recorder = null
     await recorder?.stop()
     startRecorder()
+  }
+
+  /**
+   * 영상이 들어오기 시작했다. 조각이 완성되기를 기다리지 않고 바로 연결됨으로 바꾼다.
+   * 5분 조각 설정에서 조각 완성만 기다리면 화면이 5분 내내 '연결 중'으로 남는다.
+   */
+  function handleFlowing(): void {
+    if (!state.running) return
+    state.recorderAttempt = 0
+    setCameraStatus('streaming')
   }
 
   function handleSegment(event: SegmentEvent): void {

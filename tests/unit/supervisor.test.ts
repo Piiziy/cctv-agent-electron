@@ -154,6 +154,13 @@ describe('Supervisor — 카메라 복구', () => {
     expect(harness.recorderStarts()).toBe(1)
   })
 
+  it('조각이 완성되기 전에도 영상이 들어오면 streaming 이 된다', async () => {
+    await start()
+    expect(harness.supervisor.status().camera).toBe('connecting')
+    harness.emitFlowing()
+    await waitFor(() => harness.supervisor.status().camera === 'streaming')
+  })
+
   it('조각이 오면 streaming 상태가 된다', async () => {
     await start()
     harness.emitSegment('seg_20260907_143000_000.mp4')
