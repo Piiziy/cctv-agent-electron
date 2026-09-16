@@ -225,6 +225,8 @@ export interface NearbyCamera {
 export interface SegmentDto {
   readonly videoId: string
   readonly cameraId: string | null
+  /** (PC, 카메라)별 조각 번호. 2f 의 '조각 #1284' — 사장님이 지원팀에 조각을 가리킬 때 쓴다. */
+  readonly sequence: number | null
   readonly startedAt: string
   readonly endedAt: string
   readonly durationSec: number | null

@@ -22,6 +22,7 @@ import type { StreamConnectionState } from '../../shared/ipc'
 import type { EventListItem, ServerStreamMessage } from '../../shared/server-types'
 import { api } from '../lib/api'
 import { playAlarm } from '../lib/alarm'
+import { POPUP_ALERTS_KEY, usePreference } from '../hooks/usePreference'
 import { getUnconfirmedCount } from '../lib/server-api'
 import { useSession } from './session'
 
@@ -76,6 +77,12 @@ export const StreamProvider = ({ children }: { children: ReactNode }) => {
   const [resyncToken, setResyncToken] = useState(0)
   const listeners = useRef(new Set<Listener>())
   const wasDisconnected = useRef(false)
+  // 2g 'PC 팝업 + 소리'. 끄면 피드와 배지만 갱신된다.
+  const [popupsEnabled] = usePreference(POPUP_ALERTS_KEY, true)
+  const popupsRef = useRef(popupsEnabled)
+  useEffect(() => {
+    popupsRef.current = popupsEnabled
+  }, [popupsEnabled])
 
   const subscribe = useCallback((listener: Listener) => {
     listeners.current.add(listener)
@@ -114,7 +121,7 @@ export const StreamProvider = ({ children }: { children: ReactNode }) => {
 
       if (message.type === 'event.created') {
         void recountUnconfirmed()
-        if (shouldPopUp(message.data)) {
+        if (popupsRef.current && shouldPopUp(message.data)) {
           setAlerts((queue) => [...queue, message.data])
           void playAlarm()
         }

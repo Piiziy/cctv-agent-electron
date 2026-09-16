@@ -285,14 +285,23 @@ export const Segmented = <T extends string>({
   options,
   value,
   onChange,
+  fill = false,
   className,
 }: {
   options: readonly SegmentedOption<T>[]
   value: T
   onChange: (next: T) => void
+  /** 폭을 꽉 채우고 칸을 똑같이 나눈다 (2f 상태 선택). */
+  fill?: boolean
   className?: string
 }) => (
-  <div className={cn('inline-flex gap-0.5 self-start rounded-small bg-gray-100 p-1', className)}>
+  <div
+    className={cn(
+      'inline-flex gap-0.5 rounded-small bg-gray-100 p-1',
+      fill ? 'flex w-full' : 'self-start',
+      className,
+    )}
+  >
     {options.map((option) => (
       <button
         key={option.value}
@@ -300,6 +309,7 @@ export const Segmented = <T extends string>({
         onClick={() => onChange(option.value)}
         className={cn(
           'rounded-[6px] px-3.5 py-1.5 text-body-sm transition',
+          fill && 'flex-1 p-2 text-center',
           option.value === value
             ? 'bg-surface font-semibold text-gray-900 shadow-segment'
             : 'font-medium text-gray-600 hover:text-gray-900',
@@ -614,3 +624,56 @@ export const Stat = ({ label, value }: { label: string; value: ReactNode }) => (
     <span className="text-h3 text-gray-900">{value}</span>
   </div>
 )
+
+/* ------------------------------------------------------------ SelectButton */
+
+export interface SelectOption<T extends string> {
+  readonly value: T
+  readonly label: string
+}
+
+/**
+ * 2e 필터의 '기간: 오늘 ▾' 버튼. 모양은 secondary 버튼(.bs) 그대로 두고, 그 위에
+ * 투명한 네이티브 <select> 를 겹친다 — 드롭다운을 직접 만들면 키보드·스크린리더
+ * 처리를 다시 짜야 한다.
+ */
+export const SelectButton = <T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  className,
+}: {
+  label: string
+  value: T
+  options: readonly SelectOption<T>[]
+  onChange: (next: T) => void
+  className?: string
+}) => {
+  const current = options.find((option) => option.value === value)?.label ?? ''
+  return (
+    <label
+      className={cn(
+        'relative inline-flex items-center justify-center whitespace-nowrap rounded-small px-5 py-2.5',
+        'bg-surface text-[15px] font-semibold text-gray-900',
+        'shadow-[inset_0_0_0_1px_var(--gray-300)] hover:bg-gray-50',
+        'focus-within:ring-2 focus-within:ring-blue-600',
+        className,
+      )}
+    >
+      {label}: {current} ▾
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value as T)}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}

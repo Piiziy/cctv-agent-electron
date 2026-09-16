@@ -640,7 +640,33 @@ export const createMockServer = (): MockServer => {
     {
       method: 'GET',
       pattern: /^\/stores\/([^/]+)\/segments$/,
-      handle: () => ok({ segments: [] }),
+      handle: ([, storeId], _body, params) => {
+        // 1분 조각을 벽시계에 맞춰 만든다. 창고는 11분 전부터 끊겨 조각이 없다.
+        const cameraId = params.get('cameraId')
+        const from = Date.parse(params.get('from') ?? '')
+        const to = Date.parse(params.get('to') ?? '')
+        const cam = activeCameras(storeId ?? '').find((c) => c.id === cameraId)
+        if (!cam || Number.isNaN(from) || Number.isNaN(to)) return ok({ segments: [] })
+        const store = state.db.stores.find((s) => s.id === storeId)
+        const length = (store?.segmentSeconds ?? 60) * 1000
+        const brokenSince = cam.state === 'connected' ? Infinity : Date.parse(cam.stateUpdatedAt ?? '')
+        const first = Math.ceil(from / length) * length
+        const count = Math.max(0, Math.floor((to - first) / length))
+        const segments = Array.from({ length: count }, (_, index) => first + index * length)
+          .filter((start) => start + length <= Date.now() && start < brokenSince)
+          .map((start) => ({
+            videoId: `vid-${cam.id}-${start}`,
+            cameraId: cam.id,
+            sequence: Math.floor(start / length) % 100_000,
+            startedAt: new Date(start).toISOString(),
+            endedAt: new Date(start + length).toISOString(),
+            durationSec: length / 1000,
+            status: 'done',
+            playbackUrl: null,
+          }))
+          .reverse()
+        return ok({ segments })
+      },
     },
     {
       method: 'GET',

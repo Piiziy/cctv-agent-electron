@@ -56,6 +56,9 @@ export const formatFullDateTime = (iso: string): string => {
   return `${date.getFullYear()}. ${pad(date.getMonth() + 1)}. ${pad(date.getDate())} ${formatClockSeconds(iso)}`
 }
 
+/** 2026-09-16 14:31:52 — 2f 플레이어 라벨 (CCTV 화면 표기 관례) */
+export const formatStamp = (iso: string): string => `${localDateKey(new Date(iso))} ${formatClockSeconds(iso)}`
+
 /** 11분 · 2시간 · 3일 — '끊김 11분', 'PC 꺼짐 2시간' */
 export const formatDuration = (seconds: number): string => {
   if (seconds < 60) return `${Math.max(1, Math.round(seconds))}초`
