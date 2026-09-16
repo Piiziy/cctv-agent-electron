@@ -176,6 +176,15 @@ export const updateMemo = async (eventId: string, memo: string): Promise<EventLi
     })
   ).event
 
+/** 내비 배지·모바일 탭 배지 (계약 5.6). */
+export const getUnconfirmedCount = async (storeId: string, scope: 'today' | 'all' = 'all'): Promise<number> =>
+  (
+    await call<{ count: number }>({
+      method: 'GET',
+      path: `/stores/${id(storeId)}/events/unconfirmed-count${query({ scope })}`,
+    })
+  ).count
+
 export const getTimeline = (storeId: string, date: string): Promise<TimelineDto> =>
   call<TimelineDto>({ method: 'GET', path: `/stores/${id(storeId)}/events/timeline${query({ date })}` })
 

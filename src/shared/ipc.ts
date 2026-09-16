@@ -37,6 +37,10 @@ export const IPC = {
 
   // 2d 위험 팝업 — 창을 최상위로 올리고 작업표시줄을 깜빡인다.
   attention: 'window:attention',
+  // 클립 저장 — 서명 URL 을 기본 브라우저로 연다. 렌더러 안에서 열면 앱 창이 이동한다.
+  openExternal: 'window:open-external',
+  // 112 신고 안내문 복사.
+  copyText: 'window:copy-text',
 } as const
 
 /** 실패 사유를 구분해 화면이 제조사별 안내를 띄울 수 있게 한다. */
@@ -133,4 +137,7 @@ export interface AgentApi {
 
   /** 위험 팝업이 떠 있는 동안 창을 최상위로 붙잡는다. */
   attention(on: boolean): Promise<void>
+  /** http(s) 주소만 연다. */
+  openExternal(url: string): Promise<boolean>
+  copyText(text: string): Promise<void>
 }

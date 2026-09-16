@@ -74,7 +74,7 @@ export const Button = ({
     type="button"
     disabled={disabled || loading}
     className={cn(
-      'inline-flex items-center justify-center gap-2 font-semibold transition',
+      'inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition',
       // 디자인 4장: loading = gray/300. disabled 도 같은 처리를 쓴다 —
       // 둘 다 "지금 누를 수 없다"는 같은 뜻이라 두 모양을 만들 이유가 없다.
       'disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white',
@@ -201,7 +201,7 @@ export const Tag = ({
 }) => (
   <span
     className={cn(
-      'inline-flex items-center rounded-chip px-3 py-1 text-caption font-semibold',
+      'inline-flex items-center whitespace-nowrap rounded-chip px-3 py-1 text-caption font-semibold',
       TAG[tone],
       className,
     )}
@@ -222,7 +222,7 @@ const STATUS_COLOR: Record<StatusTone, string> = {
 }
 
 export const StatusDot = ({ tone, className }: { tone: StatusTone; className?: string }) => (
-  <span className={cn('inline-block size-2 rounded-full', STATUS_COLOR[tone], className)} />
+  <span className={cn('inline-block size-2 shrink-0 rounded-full', STATUS_COLOR[tone], className)} />
 )
 
 export const StatusLabel = ({
@@ -376,7 +376,10 @@ export const CardTitle = ({ children, className }: { children: ReactNode; classN
 
 /* -------------------------------------------------------------- Video area */
 
-/** 영상이 들어갈 자리. 디자인시스템 4장 "영상 영역은 gray/800". */
+/**
+ * 영상이 들어갈 자리. 디자인시스템 4장 "영상 영역은 gray/800".
+ * 사선 줄무늬는 PC 앱 디자인의 .vid 규칙 그대로 — 화면이 오기 전에도 '영상 자리'로 읽힌다.
+ */
 export const VideoSurface = ({
   className,
   children,
@@ -384,7 +387,15 @@ export const VideoSurface = ({
   className?: string
   children?: ReactNode
 }) => (
-  <div className={cn('relative aspect-video w-full overflow-hidden bg-video', className)}>
+  <div
+    className={cn(
+      'relative flex aspect-video w-full items-center justify-center overflow-hidden',
+      'bg-video text-caption text-gray-500',
+      'bg-[length:24px_24px]',
+      'bg-[linear-gradient(135deg,rgb(255_255_255/.04)_25%,transparent_25%,transparent_50%,rgb(255_255_255/.04)_50%,rgb(255_255_255/.04)_75%,transparent_75%)]',
+      className,
+    )}
+  >
     {children}
   </div>
 )

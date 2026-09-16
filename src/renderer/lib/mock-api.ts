@@ -246,5 +246,12 @@ export const createMockApi = (): AgentApi => {
       // 브라우저에는 '최상위 창'이 없다. 제목만 바꿔 눈에 띄게 한다.
       document.title = on ? '⚠ 위험 감지 — Scene Stealer' : 'Scene Stealer'
     },
+    openExternal: async (url) => {
+      window.open(url, '_blank', 'noopener')
+      return true
+    },
+    copyText: async (text) => {
+      await navigator.clipboard?.writeText(text).catch(() => undefined)
+    },
   }
 }

@@ -43,6 +43,8 @@ const api: AgentApi = {
   onServerStreamState: (listener) => subscribe<StreamConnectionState>(IPC.serverStreamState, listener),
 
   attention: (on) => ipcRenderer.invoke(IPC.attention, on),
+  openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
+  copyText: (text) => ipcRenderer.invoke(IPC.copyText, text),
 }
 
 contextBridge.exposeInMainWorld('api', api)

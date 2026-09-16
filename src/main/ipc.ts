@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ipcMain, shell, type BrowserWindow } from 'electron'
+import { clipboard, ipcMain, shell, type BrowserWindow } from 'electron'
 import {
   IPC,
   type AuthResult,
@@ -161,6 +161,22 @@ export const registerIpc = (
     }
     window.setAlwaysOnTop(false)
     window.flashFrame(false)
+  })
+
+  ipcMain.handle(IPC.openExternal, async (_event, url: string): Promise<boolean> => {
+    // 렌더러가 file:, javascript:, 로컬 실행 파일 경로를 넘기지 못하게 한다.
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+      await shell.openExternal(parsed.toString())
+      return true
+    } catch {
+      return false
+    }
+  })
+
+  ipcMain.handle(IPC.copyText, (_event, text: string) => {
+    clipboard.writeText(String(text))
   })
 
   ipcMain.handle(IPC.discover, async (_event, timeoutMs?: number): Promise<DiscoverResult> => {

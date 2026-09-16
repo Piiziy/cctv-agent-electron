@@ -39,3 +39,9 @@ declare const __SCENE_STEALER_BUILD_DEFAULTS__:
       readonly supabaseAnonKey: string
     }
   | undefined
+
+/** Vite 가 정적 자산을 번들하고 URL 문자열을 돌려준다. */
+declare module '*.svg' {
+  const url: string
+  export default url
+}

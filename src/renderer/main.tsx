@@ -1,8 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter } from 'react-router-dom'
 import { App } from './App'
-import { ComponentGallery } from './screens/dev/ComponentGallery'
 import './index.css'
 
 /**
@@ -14,11 +13,7 @@ if (root) {
   createRoot(root).render(
     <StrictMode>
       <HashRouter>
-        <Routes>
-          {/* 제품 화면이 아니라 컴포넌트 확인용. 디자인 HTML 과 나란히 비교한다. */}
-          <Route path="/dev/components" element={<ComponentGallery />} />
-          <Route path="*" element={<App />} />
-        </Routes>
+        <App />
       </HashRouter>
     </StrictMode>,
   )
