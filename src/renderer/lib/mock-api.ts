@@ -1,4 +1,5 @@
-import type { AgentApi } from '../../shared/ipc'
+import type { AgentApi, SessionSummary } from '../../shared/ipc'
+import { createMockServer, frame } from './mock-server'
 import {
   DEFAULT_CONFIG,
   type AgentConfig,
@@ -71,10 +72,49 @@ const PLACEHOLDER =
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * 새로고침(HMR)해도 로그인·설정이 풀리지 않게 탭 수명만큼 들고 있는다.
+ * 저장소를 못 쓰는 환경(시크릿 창 등)이면 그냥 메모리로 돈다.
+ */
+const persisted = <T>(key: string, fallback: T) => ({
+  read: (): T => {
+    try {
+      const raw = sessionStorage.getItem(key)
+      return raw ? (JSON.parse(raw) as T) : fallback
+    } catch {
+      return fallback
+    }
+  },
+  write: (value: T): void => {
+    try {
+      sessionStorage.setItem(key, JSON.stringify(value))
+    } catch {
+      // 못 써도 동작은 한다.
+    }
+  },
+})
+
+const configStorage = persisted<AgentConfig>('scene-stealer:mock-config', {
+  ...DEFAULT_CONFIG,
+  deviceId: 'agent-mock0001',
+})
+const sessionStorageBox = persisted<SessionSummary>('scene-stealer:mock-session', { signedIn: false })
+
+declare global {
+  interface Window {
+    /** 개발용 — 콘솔에서 window.__sceneStealer.emitRiskEvent() 로 2d 팝업을 띄운다. */
+    __sceneStealer?: { emitRiskEvent: ReturnType<typeof createMockServer>['emitRiskEvent'] }
+  }
+}
+
 export const createMockApi = (): AgentApi => {
   const listeners = new Set<(status: AgentStatus) => void>()
+  const server = createMockServer()
+  window.__sceneStealer = { emitRiskEvent: server.emitRiskEvent }
+
   const store = {
-    config: { ...DEFAULT_CONFIG, deviceId: 'agent-mock0001' } as AgentConfig,
+    config: configStorage.read(),
+    session: sessionStorageBox.read(),
     status: {
       running: false,
       upload: 'idle',
@@ -108,9 +148,10 @@ export const createMockApi = (): AgentApi => {
       await delay(300)
       return { ok: true, dataUrl: PLACEHOLDER }
     },
-    previewStart: async () => {
+    previewStart: async (_rtspUri, options) => {
       await delay(300)
-      return { ok: true as const, url: PLACEHOLDER }
+      // 격자 타일마다 다른 화면처럼 보이게 키를 라벨로 쓴다.
+      return { ok: true as const, url: options?.key ? frame('LIVE') : PLACEHOLDER }
     },
     previewStop: async () => undefined,
     start: async (cameras) => {
@@ -149,6 +190,7 @@ export const createMockApi = (): AgentApi => {
     getConfig: async () => store.config,
     setConfig: async (patch) => {
       store.config = { ...store.config, ...patch }
+      configStorage.write(store.config)
       return store.config
     },
     getStatus: async () => store.status,
@@ -156,6 +198,53 @@ export const createMockApi = (): AgentApi => {
     onStatus: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener) as unknown as void
+    },
+
+    authSendOtp: async (phone) => {
+      await delay(500)
+      const digits = phone.replace(/\D/g, '')
+      return /^010\d{8}$/.test(digits)
+        ? { ok: true, value: null }
+        : { ok: false, message: '휴대폰 번호를 확인해 주세요. (예: 010-1234-5678)' }
+    },
+    authVerifyOtp: async (phone, code) => {
+      await delay(500)
+      // 000000 은 틀린 번호로 취급한다 — 에러 화면을 확인하려고.
+      if (!/^\d{6}$/.test(code) || code === '000000') {
+        return { ok: false, message: '인증번호가 맞지 않거나 만료되었습니다. 다시 확인해 주세요.' }
+      }
+      const session: SessionSummary = { signedIn: true, userId: 'user-mock-owner', phone }
+      store.session = session
+      sessionStorageBox.write(session)
+      return { ok: true, value: session }
+    },
+    authSignOut: async () => {
+      server.stopStream()
+      store.session = { signedIn: false }
+      sessionStorageBox.write(store.session)
+    },
+    authGetSession: async () => store.session,
+
+    serverRequest: async (request) =>
+      store.session.signedIn ? server.request(request) : { ok: false, status: 401, error: '로그인이 필요합니다.' },
+    serverStreamStart: async (storeId) => server.startStream(storeId),
+    serverStreamStop: async () => server.stopStream(),
+    onServerStream: (listener) => {
+      const off = server.onStream(listener)
+      return () => {
+        off()
+      }
+    },
+    onServerStreamState: (listener) => {
+      const off = server.onStreamState(listener)
+      return () => {
+        off()
+      }
+    },
+
+    attention: async (on) => {
+      // 브라우저에는 '최상위 창'이 없다. 제목만 바꿔 눈에 띄게 한다.
+      document.title = on ? '⚠ 위험 감지 — Scene Stealer' : 'Scene Stealer'
     },
   }
 }

@@ -52,6 +52,13 @@ export interface SelectedCamera {
 
 export interface AgentConfig {
   readonly backendBaseUrl: string
+  /**
+   * 사장님 로그인(휴대폰 인증)은 백엔드가 아니라 Supabase Auth 가 받는다
+   * (docs/api-contract.md 3.1). 배포본에는 빌드 때 박히고, 설정 ▸ 고급에서 바꿀 수 있다.
+   */
+  readonly supabaseUrl: string
+  /** 공개 키다(anon). 권한은 RLS 와 백엔드의 JWT 검증이 지킨다. */
+  readonly supabaseAnonKey: string
   readonly deviceToken: string
   readonly storeId: string
   /** 최초 실행 시 자동 생성 후 영속. 사용자가 편집하지 않는다. */
@@ -145,9 +152,14 @@ export interface AgentStatus {
 
 export const DEFAULT_CONFIG: Omit<AgentConfig, 'deviceId'> = {
   backendBaseUrl: '',
+  supabaseUrl: '',
+  supabaseAnonKey: '',
   deviceToken: '',
   storeId: '',
-  segmentSeconds: 300,
+  // 1분. 디자인 2b 의 '알림 빠르기' 기본값이자 백엔드 stores.segment_seconds 기본값.
+  // 조각이 짧을수록 위험 신호가 빨리 온다 — 5분이면 절도 알림이 최대 5분 늦는다.
+  // 이미 설치된 PC 는 저장된 값을 그대로 쓰고, 하트비트가 서버 설정으로 맞춘다.
+  segmentSeconds: 60,
   streamProfile: 'sub',
   spoolLimitBytes: 5 * 1024 ** 3,
   includeAudio: false,

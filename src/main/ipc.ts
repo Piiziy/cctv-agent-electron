@@ -5,10 +5,15 @@ import { join } from 'node:path'
 import { ipcMain, shell, type BrowserWindow } from 'electron'
 import {
   IPC,
+  type AuthResult,
   type DiscoverResult,
+  type PreviewOptions,
   type PreviewResult,
   type ProbeArgs,
   type ProbeResult,
+  type ServerRequest,
+  type ServerResult,
+  type SessionSummary,
   type SnapshotResult,
 } from '../shared/ipc'
 import type { AgentConfig, AgentStatus, SelectedCamera } from '../shared/types'
@@ -18,7 +23,11 @@ import { classifyProfiles, isAuthFailure, probeCamera } from './services/camera-
 import { discoverCameras } from './services/discovery'
 import { probeMedia } from './services/media-probe'
 import { createPreviewService } from './services/preview-stream'
+import { createServerClient } from './services/server-client'
+import { createServerSession, SessionError } from './services/server-session'
+import { createServerStream } from './services/server-stream'
 import { captureSnapshot } from './services/snapshot'
+import { createSafeTokenStore } from './services/token-store'
 
 const toProbeFailure = (error: unknown): ProbeResult => {
   if (isAuthFailure(error)) {
@@ -38,18 +47,121 @@ const toProbeFailure = (error: unknown): ProbeResult => {
   }
 }
 
-export const registerIpc = (agent: Agent, getWindow: () => BrowserWindow | null, spoolRoot: string): void => {
+export interface IpcPaths {
+  readonly spoolRoot: string
+  /** 사장님 로그인 토큰. OS 키체인으로 암호화해서 쓴다 (token-store.ts). */
+  readonly sessionFile: string
+}
+
+export interface IpcHandles {
+  /** 앱 종료 때 열린 스트림·미리보기를 닫는다. */
+  dispose(): Promise<void>
+}
+
+const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+
+export const registerIpc = (
+  agent: Agent,
+  getWindow: () => BrowserWindow | null,
+  paths: IpcPaths,
+): IpcHandles => {
   const preview = createPreviewService({ ffmpegPath: resolveFfmpegPath() })
 
-  ipcMain.handle(IPC.previewStart, async (_event, rtspUri: string): Promise<PreviewResult> => {
+  const send = (channel: string, payload: unknown): void => {
+    const window = getWindow()
+    if (window && !window.isDestroyed()) window.webContents.send(channel, payload)
+  }
+
+  const session = createServerSession({
+    getConfig: () => agent.config.read(),
+    fetch,
+    store: createSafeTokenStore(paths.sessionFile),
+  })
+  const server = createServerClient({ getBaseUrl: () => agent.config.read().backendBaseUrl, session, fetch })
+  const stream = createServerStream({
+    getBaseUrl: () => agent.config.read().backendBaseUrl,
+    session,
+    fetch,
+    onMessage: (message) => send(IPC.serverStreamMessage, message),
+    onState: (state) => send(IPC.serverStreamState, state),
+  })
+
+  const toSummary = (): SessionSummary => {
+    const current = session.summary()
+    return current ? { signedIn: true, ...current } : { signedIn: false }
+  }
+
+  ipcMain.handle(IPC.previewStart, async (_event, rtspUri: string, options?: PreviewOptions): Promise<PreviewResult> => {
     try {
-      return { ok: true, url: await preview.start(rtspUri) }
+      return { ok: true, url: await preview.start(rtspUri, options) }
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+      return { ok: false, message: errorMessage(error) }
     }
   })
 
-  ipcMain.handle(IPC.previewStop, () => preview.stop())
+  ipcMain.handle(IPC.previewStop, (_event, key?: string) => preview.stop(key))
+
+  /* ---------------------------------------------------------- 사장님 로그인 */
+
+  ipcMain.handle(IPC.authSendOtp, async (_event, phone: string): Promise<AuthResult<null>> => {
+    try {
+      await session.sendOtp(phone)
+      return { ok: true, value: null }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof SessionError ? error.message : '서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.',
+      }
+    }
+  })
+
+  ipcMain.handle(
+    IPC.authVerifyOtp,
+    async (_event, phone: string, code: string): Promise<AuthResult<SessionSummary>> => {
+      try {
+        await session.verifyOtp(phone, code)
+        return { ok: true, value: toSummary() }
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof SessionError ? error.message : '서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.',
+        }
+      }
+    },
+  )
+
+  ipcMain.handle(IPC.authSignOut, async () => {
+    // 로그아웃해도 감시(조각 업로드)는 멈추지 않는다 — 그건 기기 토큰으로 돈다.
+    // 화면만 닫힌다. 무인매장에서 누가 로그아웃을 눌러도 감시가 꺼지면 안 된다.
+    stream.stop()
+    await session.signOut()
+  })
+
+  ipcMain.handle(IPC.authGetSession, (): SessionSummary => toSummary())
+
+  /* ------------------------------------------------------------ 백엔드 호출 */
+
+  ipcMain.handle(IPC.serverRequest, (_event, request: ServerRequest): Promise<ServerResult> => server.request(request))
+  ipcMain.handle(IPC.serverStreamStart, (_event, storeId: string) => stream.start(storeId))
+  ipcMain.handle(IPC.serverStreamStop, () => stream.stop())
+
+  /* ------------------------------------------------------------ 2d 위험 팝업 */
+
+  ipcMain.handle(IPC.attention, (_event, on: boolean) => {
+    const window = getWindow()
+    if (!window || window.isDestroyed()) return
+    if (on) {
+      // 사장님이 다른 프로그램을 보고 있어도 위험 팝업은 앞에 떠야 한다.
+      // 'screen-saver' 레벨이어야 전체화면 앱 위로도 올라온다.
+      window.setAlwaysOnTop(true, 'screen-saver')
+      window.show()
+      window.focus()
+      window.flashFrame(true)
+      return
+    }
+    window.setAlwaysOnTop(false)
+    window.flashFrame(false)
+  })
 
   ipcMain.handle(IPC.discover, async (_event, timeoutMs?: number): Promise<DiscoverResult> => {
     try {
@@ -129,7 +241,12 @@ export const registerIpc = (agent: Agent, getWindow: () => BrowserWindow | null,
     agent.config.write(patch),
   )
   ipcMain.handle(IPC.getStatus, (): AgentStatus => agent.fleet.status())
-  ipcMain.handle(IPC.openSpoolFolder, () => shell.openPath(spoolRoot))
+  ipcMain.handle(IPC.openSpoolFolder, () => shell.openPath(paths.spoolRoot))
 
-  void getWindow
+  return {
+    dispose: async () => {
+      stream.stop()
+      await preview.stop()
+    },
+  }
 }

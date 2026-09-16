@@ -2,7 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { ulid } from 'ulid'
 import type { AgentStatus } from '../../shared/types'
 import { resolveFfmpegPath } from '../lib/ffmpeg'
-import { createConfigStore, type ConfigStore } from './config-store'
+import { createConfigStore, type BuildDefaults, type ConfigStore } from './config-store'
 import { createFleet, type Fleet } from './fleet'
 import { probeMedia } from './media-probe'
 import { createSegmentRecorder } from './segment-recorder'
@@ -20,6 +20,10 @@ export interface Agent {
   readonly config: ConfigStore
 }
 
+/** 빌드 때 박힌 서버 주소. vitest 등 define 이 없는 곳에서는 비어 있다. */
+const buildDefaults = (): BuildDefaults =>
+  typeof __SCENE_STEALER_BUILD_DEFAULTS__ === 'undefined' ? {} : __SCENE_STEALER_BUILD_DEFAULTS__
+
 /**
  * 실제 의존성을 물린 에이전트를 만든다.
  *
@@ -27,7 +31,7 @@ export interface Agent {
  * 가짜를 넣을 수 있다. 여기 있는 것은 오직 "무엇을 쓸지" 뿐이다.
  */
 export const createAgent = (paths: AgentPaths, onStatus: (status: AgentStatus) => void): Agent => {
-  const config = createConfigStore(paths.configFile)
+  const config = createConfigStore(paths.configFile, buildDefaults())
   const ffmpegPath = resolveFfmpegPath()
 
   const fleet = createFleet({
