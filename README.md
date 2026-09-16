@@ -36,6 +36,24 @@ npm run dev
 가짜 카메라가 ONVIF로 자신을 광고하므로, 앱의 카메라 검색 목록에 `FakeCam SIM-1000`이 뜬다.
 아이디·비밀번호는 아무 값이나 넣으면 된다.
 
+앱 흐름은 **2a 로그인·매장 연결 → 2b 카메라 추가 → 2c 실시간**이다 (디자인:
+`design/씬스틸러 PC 앱.dc.html`). 서버 주소는 첫 화면 하단의 **설정 ▸ 고급**에서 넣는다.
+배포본에는 빌드 때 박는다:
+
+```bash
+SCENE_STEALER_API_URL=https://api.example.com \
+SCENE_STEALER_SUPABASE_URL=https://xxxx.supabase.co \
+SCENE_STEALER_SUPABASE_ANON_KEY=... \
+npm run dist
+```
+
+### 화면만 브라우저로 보기
+
+`npm run ui` 는 백엔드 없이 가짜 API로 뜬다. 휴대폰 번호는 아무 010 번호, 인증번호는
+아무 6자리(`000000` 은 틀린 번호로 취급)면 로그인된다. 새 위험 이벤트(2d 팝업)는 브라우저
+콘솔에서 `window.__sceneStealer.emitRiskEvent()` 로 띄운다. 컴포넌트 전시장은
+`#/dev/components`.
+
 ## 스크립트
 
 | 명령 | 설명 |
@@ -51,7 +69,9 @@ npm run dev
 
 ## 백엔드 API 규격
 
-백엔드는 아직 없다. 아래가 계약이며, 에이전트는 이대로 보낸다.
+백엔드는 [scene-stealer-back](https://github.com/yimsNEO/scene-stealer-back) 이다. 화면이 쓰는
+API 전체는 [`docs/api-contract.md`](docs/api-contract.md) (백엔드 레포와 같은 사본). 아래는
+그중 에이전트가 영상을 올리는 부분이다.
 
 ```http
 POST {backendBaseUrl}/v1/segments
@@ -150,17 +170,22 @@ Idempotency-Key: <segmentId>
 
 | 항목 | 기본값 | 비고 |
 |---|---|---|
-| `backendBaseUrl` | (필수) | 앱의 서버 설정 화면에서 입력 |
-| `deviceToken` | (필수) | |
-| `storeId` | (필수) | |
+| `backendBaseUrl` | 빌드 기본값 | 설정 ▸ 고급에서 바꿀 수 있다 |
+| `supabaseUrl` | 빌드 기본값 | 휴대폰 인증번호를 보내는 로그인 서버 |
+| `supabaseAnonKey` | 빌드 기본값 | 로그인 서버 공개 키 |
+| `deviceToken` | — | 2a 에서 매장에 PC 를 연결하면 서버가 발급한다 |
+| `storeId` | — | 2a 에서 고른 매장 |
 | `deviceId` | 자동 생성 | 최초 실행 시 부여, 편집 불가 |
-| `segmentSeconds` | `300` | 조각 길이 |
+| `segmentSeconds` | `60` | 조각 길이. 화면에서는 **'알림 빠르기'**. 서버의 매장 설정을 하트비트로 따라간다 |
 | `streamProfile` | `sub` | 서브스트림은 대역폭이 약 1/8 |
 | `cameras` | `[]` | 감시 중인 카메라 목록 |
 | `alignToClock` | `true` | 모든 카메라의 조각 경계를 벽시계에 맞춤 |
 | `spoolLimitBytes` | `5 GiB` | **총량.** 카메라 수로 나누어 카메라마다 같은 몫 |
 | `includeAudio` | `false` | |
 | `autoStart` | `true` | 부팅 시 자동 시작 |
+
+사장님 로그인 토큰은 `config.json` 이 아니라 `{userData}/session.bin` 에 OS 키체인으로 암호화해
+둔다 — 설정 전체가 화면(렌더러)으로 넘어가기 때문이다.
 
 **조각 길이는 감지 지연과 직결된다.** 5분으로 두면 이상행동 알림이 최대 5분 늦게 온다.
 절도는 통상 30초 내에 끝나므로, 빠른 대응이 목표라면 30초~1분을 권한다.
