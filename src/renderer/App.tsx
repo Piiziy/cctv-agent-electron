@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AgentConfig, AgentStatus, SelectedCamera } from '../shared/types'
-import { Button, Spinner } from './components/ui'
+import { Button, Spinner } from './components/legacy'
 import { api, isMock } from './lib/api'
 import { CameraSelect, type CameraChoice } from './screens/CameraSelect'
 import { CameraSetup } from './screens/CameraSetup'

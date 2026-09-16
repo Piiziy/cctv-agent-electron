@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AgentConfig } from '../../shared/types'
-import { Button, Card, Field, Notice } from '../components/ui'
+import { Button, Card, Field, Notice } from '../components/legacy'
 
 interface Props {
   readonly config: AgentConfig

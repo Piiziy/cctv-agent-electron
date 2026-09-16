@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { DiscoveredCamera } from '../../shared/types'
-import { Button, Card, Notice, Spinner } from '../components/ui'
+import { Button, Card, Notice, Spinner } from '../components/legacy'
 import { api } from '../lib/api'
 import { cn } from '../lib/cn'
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ProbeResult } from '../../shared/ipc'
 import type { SelectedCamera, StreamProfile } from '../../shared/types'
-import { Button, Card, Field, Notice, Spinner } from '../components/ui'
+import { Button, Card, Field, Notice, Spinner } from '../components/legacy'
 import { usePreview } from '../hooks/usePreview'
 import { api } from '../lib/api'
 import { cn } from '../lib/cn'

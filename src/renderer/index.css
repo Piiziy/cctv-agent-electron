@@ -1,3 +1,13 @@
+/*
+ * 폰트는 CDN 이 아니라 번들이다. 렌더러 CSP 가 default-src 'self' 라 외부
+ * 요청이 막히고, 매장 PC 는 인터넷이 끊겨도 화면이 그대로여야 한다.
+ * (디자인 HTML 은 jsdelivr/Google Fonts 를 쓰지만 같은 서체다.)
+ */
+@import 'pretendard/dist/web/variable/pretendardvariable.css';
+@import '@fontsource/prompt/700.css';
+
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,10 +20,13 @@
   }
 
   body {
-    @apply bg-slate-100 text-slate-900 antialiased;
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Segoe UI',
-      'Malgun Gothic', sans-serif;
+    @apply bg-page text-gray-900 antialiased;
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+      'Apple SD Gothic Neo', 'Segoe UI', 'Malgun Gothic', sans-serif;
+    /* 디자인시스템 2장 — 전역 자간과 숫자 폭 고정.
+       타임코드(14:32:10)가 1초마다 흔들리지 않게 tabular-nums 를 전역으로 둔다. */
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
   }
 
   /* 매장 PC 에서 드래그로 텍스트가 잡히는 것은 앱답지 않다. 입력 요소만 허용한다. */
@@ -24,5 +37,10 @@
   input,
   textarea {
     @apply select-text;
+  }
+
+  /* 포커스 링은 디자인의 border/focus(blue/600)를 따른다. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-blue-600;
   }
 }
