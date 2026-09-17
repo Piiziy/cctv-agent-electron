@@ -30,11 +30,21 @@ const migrateCameras = (source: Record<string, unknown>): readonly SelectedCamer
   return legacy && typeof legacy === 'object' ? [legacy as SelectedCamera] : []
 }
 
+/**
+ * 배포본에 박아 넣는 기본값 (서버 주소 등). 사장님이 '설정 ▸ 고급'을 몰라도
+ * 첫 실행에서 바로 로그인할 수 있어야 한다.
+ */
+export type BuildDefaults = Partial<Pick<AgentConfig, 'backendBaseUrl' | 'supabaseUrl' | 'supabaseAnonKey'>>
+
+const isBlank = (value: unknown): boolean => value === undefined || value === null || value === ''
+
 /** 알 수 없는 필드를 버리고 기본값을 채운 정규 설정을 만든다. */
-const normalize = (raw: unknown): Persisted => {
+const normalize = (raw: unknown, buildDefaults: BuildDefaults): Persisted => {
   const source = (raw ?? {}) as Record<string, unknown>
+  const defaults: Record<string, unknown> = { ...DEFAULT_CONFIG, ...buildDefaults }
+  // 빌드 기본값은 비어 있는 자리만 채운다. 고급 설정에서 바꾼 값은 지킨다.
   const config = CONFIG_KEYS.reduce<Record<string, unknown>>(
-    (acc, key) => ({ ...acc, [key]: source[key] ?? DEFAULT_CONFIG[key] }),
+    (acc, key) => ({ ...acc, [key]: isBlank(source[key]) ? defaults[key] : source[key] }),
     {},
   )
   const deviceId = typeof source.deviceId === 'string' && source.deviceId.length > 0
@@ -51,12 +61,12 @@ const normalize = (raw: unknown): Persisted => {
  * 읽기 실패는 기본값으로 조용히 복구하고, 쓰기는 임시 파일 → rename 으로 원자화한다.
  * 무인매장에는 복구해 줄 사람이 없다.
  */
-export const createConfigStore = (filePath: string): ConfigStore => {
+export const createConfigStore = (filePath: string, buildDefaults: BuildDefaults = {}): ConfigStore => {
   const load = (): Persisted => {
     try {
-      return normalize(JSON.parse(readFileSync(filePath, 'utf8')))
+      return normalize(JSON.parse(readFileSync(filePath, 'utf8')), buildDefaults)
     } catch {
-      return normalize(null)
+      return normalize(null, buildDefaults)
     }
   }
 

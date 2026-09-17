@@ -2,20 +2,24 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, Menu, nativeImage, Tray } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AgentStatus } from '../shared/types'
-import { registerIpc } from './ipc'
+import { registerIpc, type IpcHandles } from './ipc'
 import { createAgent, type Agent } from './services/agent'
+import { createHeartbeat, type Heartbeat } from './services/heartbeat'
 
 const state = {
   window: null as BrowserWindow | null,
   tray: null as Tray | null,
   agent: null as Agent | null,
   status: null as AgentStatus | null,
+  heartbeat: null as Heartbeat | null,
+  ipc: null as IpcHandles | null,
   quitting: false,
 }
 
 const paths = {
   config: () => join(app.getPath('userData'), 'config.json'),
   spool: () => join(app.getPath('userData'), 'spool'),
+  session: () => join(app.getPath('userData'), 'session.bin'),
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -38,12 +42,14 @@ const trayTitle = (status: AgentStatus | null): string => {
 
 const createWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
-    width: 980,
-    height: 760,
-    minWidth: 820,
-    minHeight: 620,
+    // 디자인은 1440 폭 기준이다 (design/씬스틸러 PC 앱.dc.html). 작은 모니터에서도
+    // 2c 의 카메라 격자 + 오른쪽 위험 신호 피드가 나란히 들어가는 최소 폭을 둔다.
+    width: 1440,
+    height: 900,
+    minWidth: 1180,
+    minHeight: 720,
     show: false,
-    title: 'CCTV 수집기',
+    title: 'Scene Stealer',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -130,9 +136,25 @@ if (!app.requestSingleInstanceLock()) {
     const agent = createAgent({ configFile: paths.config(), spoolRoot }, publishStatus)
     state.agent = agent
 
-    registerIpc(agent, () => state.window, spoolRoot)
+    state.ipc = registerIpc(agent, () => state.window, { spoolRoot, sessionFile: paths.session() })
     state.window = createWindow()
     createTray()
+
+    // 서버가 PC·카메라가 살아 있는지 아는 유일한 신호 (요구사항 7.1).
+    // 조각 길이는 서버 설정(매장 '알림 빠르기')이 단일 출처라 바뀌면 따라간다.
+    state.heartbeat = createHeartbeat({
+      getConfig: () => agent.config.read(),
+      getStatus: () => agent.fleet.status(),
+      fetch,
+      onSegmentSeconds: (seconds) => {
+        agent.config.write({ segmentSeconds: seconds })
+        // 조각 길이는 녹화기를 새로 띄울 때 읽힌다. 감시 중이면 다시 건다 —
+        // 사장님이 설정을 바꿨을 때만 일어나는 일이라 짧은 공백을 감수한다.
+        const current = agent.fleet.status()
+        if (current.running) void agent.fleet.start(agent.config.read().cameras)
+      },
+    })
+    state.heartbeat.start()
 
     const config = agent.config.read()
     app.setLoginItemSettings({ openAtLogin: config.autoStart, openAsHidden: true })
@@ -162,7 +184,8 @@ if (!app.requestSingleInstanceLock()) {
     })
     if (choice !== 1) return
     state.quitting = true
-    void state.agent?.fleet.stop().then(() => app.quit())
+    state.heartbeat?.stop()
+    void Promise.all([state.agent?.fleet.stop(), state.ipc?.dispose()]).then(() => app.quit())
   })
 
   // 창을 다 닫아도 트레이에서 계속 돈다 (macOS 관례와 동일하게 모든 플랫폼에서)

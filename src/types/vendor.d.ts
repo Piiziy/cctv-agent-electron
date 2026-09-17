@@ -27,3 +27,21 @@ declare module 'ffprobe-static' {
   const ffprobe: { path: string }
   export default ffprobe
 }
+
+/**
+ * electron.vite.config.ts 의 main.define 이 빌드 때 채운다. vitest 에서는
+ * 정의되지 않으므로 쓰는 쪽에서 typeof 로 확인한다.
+ */
+declare const __SCENE_STEALER_BUILD_DEFAULTS__:
+  | {
+      readonly backendBaseUrl: string
+      readonly supabaseUrl: string
+      readonly supabaseAnonKey: string
+    }
+  | undefined
+
+/** Vite 가 정적 자산을 번들하고 URL 문자열을 돌려준다. */
+declare module '*.svg' {
+  const url: string
+  export default url
+}

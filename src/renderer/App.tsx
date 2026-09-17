@@ -1,150 +1,112 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { AgentConfig, AgentStatus, SelectedCamera } from '../shared/types'
-import { Button, Spinner } from './components/ui'
-import { api, isMock } from './lib/api'
-import { CameraSelect, type CameraChoice } from './screens/CameraSelect'
-import { CameraSetup } from './screens/CameraSetup'
-import { Dashboard } from './screens/Dashboard'
-import { ServerSetup } from './screens/ServerSetup'
+/**
+ * 앱 셸 + 라우팅.
+ *
+ * 예전 흐름(서버 설정 → 카메라 선택 → 대시보드)을 디자인의 2a → 2b → 2c 로 바꿨다.
+ * 서버 주소·토큰 입력은 사장님이 볼 일이 없어서 설정 ▸ 고급(/settings/advanced)으로
+ * 옮겼고, 로그인 전에도 들어갈 수 있다 — 서버 주소가 없으면 로그인 자체를 못 한다.
+ *
+ * 2d 위험 팝업은 라우트가 아니다. 어느 화면 위에서든 뜬다.
+ */
+import type { ReactNode } from 'react'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { SessionProvider, useSession } from './app/session'
+import { StreamProvider, useStream } from './app/stream'
+import { Spinner } from './components/ui'
+import { TopNav } from './components/TopNav'
+import { cn } from './lib/cn'
+import { AddCamera } from './screens/cameras/AddCamera'
+import { ComponentGallery } from './screens/dev/ComponentGallery'
+import { EventDetailScreen } from './screens/events/EventDetail'
+import { EventList } from './screens/events/EventList'
+import { Live } from './screens/live/Live'
+import { Onboarding } from './screens/onboarding/Onboarding'
+import { RiskAlertModal } from './screens/alert/RiskAlertModal'
+import { Advanced } from './screens/settings/Advanced'
+import { Settings } from './screens/settings/Settings'
 
-type Screen = 'server' | 'select' | 'setup' | 'dashboard'
+const FullScreenSpinner = () => (
+  <div className="flex h-full items-center justify-center bg-page text-gray-600">
+    <Spinner />
+  </div>
+)
 
-const initialScreen = (config: AgentConfig): Screen => {
-  if (!config.backendBaseUrl || !config.deviceToken || !config.storeId) return 'server'
-  return config.cameras.length > 0 ? 'dashboard' : 'select'
+/** 010-1234-5678 → 010-****-5678. 로그인이 휴대폰 번호뿐이라 이름이 없다. */
+const maskPhone = (phone: string): string => {
+  const local = phone.replace(/^\+82/, '0').replace(/\D/g, '')
+  return local.length === 11 ? `${local.slice(0, 3)}-****-${local.slice(7)}` : phone
 }
 
-export const App = () => {
-  const [config, setConfig] = useState<AgentConfig | null>(null)
-  const [status, setStatus] = useState<AgentStatus | null>(null)
-  const [screen, setScreen] = useState<Screen>('server')
-  const [choice, setChoice] = useState<CameraChoice | null>(null)
-
-  useEffect(() => {
-    void (async () => {
-      const [loadedConfig, loadedStatus] = await Promise.all([api.getConfig(), api.getStatus()])
-      setConfig(loadedConfig)
-      setStatus(loadedStatus)
-      setScreen(initialScreen(loadedConfig))
-    })()
-    return api.onStatus(setStatus)
-  }, [])
-
-  const saveConfig = useCallback(async (patch: Partial<AgentConfig>) => {
-    setConfig(await api.setConfig(patch))
-  }, [])
-
-  /** 카메라 목록을 갈아끼우고 감시를 다시 건다. */
-  const applyCameras = useCallback(async (cameras: readonly SelectedCamera[]) => {
-    await api.start(cameras)
-    setConfig(await api.getConfig())
-    setStatus(await api.getStatus())
-  }, [])
-
-  const addCamera = useCallback(
-    async (camera: SelectedCamera, segmentSeconds: number) => {
-      await api.setConfig({ segmentSeconds, streamProfile: camera.streamProfile })
-      const current = await api.getConfig()
-      // 같은 카메라를 두 번 넣으면 같은 폴더를 두 프로세스가 쓰게 된다.
-      const next = [...current.cameras.filter((c) => c.id !== camera.id), camera]
-      await applyCameras(next)
-      setScreen('dashboard')
-    },
-    [applyCameras],
-  )
-
-  const removeCamera = useCallback(
-    async (cameraId: string) => {
-      const current = await api.getConfig()
-      const next = current.cameras.filter((c) => c.id !== cameraId)
-      if (next.length === 0) {
-        await api.stop()
-        await api.setConfig({ cameras: [] })
-        setConfig(await api.getConfig())
-        setStatus(await api.getStatus())
-        setScreen('select')
-        return
-      }
-      await applyCameras(next)
-    },
-    [applyCameras],
-  )
-
-  const stopAll = useCallback(async () => {
-    await api.stop()
-    setStatus(await api.getStatus())
-  }, [])
-
-  if (!config || !status) {
-    return (
-      <div className="flex h-full items-center justify-center text-slate-400">
-        <Spinner />
-      </div>
-    )
-  }
-
-  const configured = Boolean(config.backendBaseUrl && config.deviceToken && config.storeId)
-
+const ConnectionBanner = () => {
+  const { connection } = useStream()
+  if (connection !== 'reconnecting' && connection !== 'unauthorized') return null
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
-        <span className="text-sm font-semibold text-slate-800">CCTV 수집기</span>
-        <div className="flex items-center gap-2">
-          {isMock && (
-            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-              미리보기 모드
-            </span>
-          )}
-          <Button tone="ghost" onClick={() => setScreen('server')}>
-            서버 설정
-          </Button>
-        </div>
-      </div>
-
-      <main className="flex-1 overflow-y-auto p-6">
-        {screen === 'server' && (
-          <ServerSetup
-            config={config}
-            onSave={async (patch) => {
-              await saveConfig(patch)
-              setScreen(config.cameras.length > 0 ? 'dashboard' : 'select')
-            }}
-            onCancel={
-              configured ? () => setScreen(config.cameras.length > 0 ? 'dashboard' : 'select') : null
-            }
-          />
-        )}
-
-        {screen === 'select' && (
-          <CameraSelect
-            addedIds={config.cameras.map((c) => c.id)}
-            onChoose={(next) => {
-              setChoice(next)
-              setScreen('setup')
-            }}
-            onCancel={config.cameras.length > 0 ? () => setScreen('dashboard') : null}
-          />
-        )}
-
-        {screen === 'setup' && choice && (
-          <CameraSetup
-            choice={choice}
-            initialSegmentSeconds={config.segmentSeconds}
-            onBack={() => setScreen('select')}
-            onAdd={addCamera}
-          />
-        )}
-
-        {screen === 'dashboard' && (
-          <Dashboard
-            status={status}
-            config={config}
-            onStop={stopAll}
-            onAddCamera={() => setScreen('select')}
-            onRemoveCamera={removeCamera}
-          />
-        )}
-      </main>
+    <div
+      role="alert"
+      className={cn(
+        'flex shrink-0 items-center gap-2 px-page py-2.5 text-body-sm font-semibold',
+        'bg-error-50 text-error-main',
+      )}
+    >
+      <span className="size-2 animate-pulse rounded-full bg-risk-high" />
+      {connection === 'unauthorized'
+        ? '서버 연결 끊김 — 로그인이 만료되었습니다. 다시 로그인해 주세요.'
+        : '서버 연결 끊김 — 다시 연결하는 중입니다. 그동안의 위험 신호는 연결되면 불러옵니다.'}
     </div>
   )
 }
+
+const Shell = () => {
+  const { store, session, signOut } = useSession()
+  const { unconfirmedCount, alert } = useStream()
+
+  return (
+    <div className="flex h-full flex-col bg-page">
+      <TopNav
+        storeName={store?.name ?? null}
+        unconfirmedCount={unconfirmedCount}
+        userLabel={session.signedIn ? maskPhone(session.phone) : null}
+        onSignOut={() => void signOut()}
+      />
+      <ConnectionBanner />
+      <main className="min-h-0 flex-1 overflow-auto">
+        <Outlet />
+      </main>
+      {alert && <RiskAlertModal event={alert} />}
+    </div>
+  )
+}
+
+/** 로그인 + 매장 연결이 끝나야 들어갈 수 있는 화면들. */
+const RequireStore = ({ children }: { children: ReactNode }) => {
+  const { session, store, storeResolved } = useSession()
+  const location = useLocation()
+
+  if (!session.signedIn) return <Navigate to="/onboarding" replace state={{ from: location.pathname }} />
+  if (!storeResolved) return <FullScreenSpinner />
+  if (!store) return <Navigate to="/onboarding?step=store" replace />
+  return <StreamProvider>{children}</StreamProvider>
+}
+
+export const App = () => (
+  <SessionProvider fallback={<FullScreenSpinner />}>
+    <Routes>
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/settings/advanced" element={<Advanced />} />
+      <Route path="/dev/components" element={<ComponentGallery />} />
+      <Route
+        element={
+          <RequireStore>
+            <Shell />
+          </RequireStore>
+        }
+      >
+        <Route path="/live" element={<Live />} />
+        <Route path="/events" element={<EventList />} />
+        <Route path="/events/:eventId" element={<EventDetailScreen />} />
+        <Route path="/cameras/add" element={<AddCamera />} />
+        <Route path="/settings" element={<Settings />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/live" replace />} />
+    </Routes>
+  </SessionProvider>
+)
