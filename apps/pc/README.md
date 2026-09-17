@@ -19,11 +19,13 @@
 
 ## 빠른 시작
 
+이 앱은 모노레포의 `apps/pc` 워크스페이스다 (패키지 이름 `cctv-agent`). 설치는 **저장소 루트**에서 한다.
+
 ```bash
 npm install
 ```
 
-터미널 두 개로 나눠 띄운다.
+아래 명령은 저장소 루트에서도, `apps/pc` 안에서도 똑같이 동작한다. 터미널 두 개로 나눠 띄운다.
 
 ```bash
 npm run fake-camera
@@ -67,10 +69,18 @@ npm run dist
 | `npm run typecheck` | 타입 검사 |
 | `npm run dist` | 설치 파일 빌드 (dmg/exe/AppImage) |
 
+루트에서 실행하면 `build`·`typecheck`·`test*` 는 Turborepo 로(결과 캐시), 나머지는
+`npm run <명령> -w cctv-agent` 로 이 앱에 넘어간다. 인자는 `--` 뒤에 붙인다
+(예: `npm run dist -- --dir`).
+
+`electron` 버전은 범위(`^`)가 아니라 **정확한 버전**으로 고정한다. 모노레포에서는 electron 이
+루트 `node_modules` 로 올라가서, electron-builder 가 설치본에서 버전을 못 읽고 `package.json`
+의 고정 버전만 본다. 올릴 때는 `npm install -w cctv-agent -D -E electron@<버전>`.
+
 ## 백엔드 API 규격
 
 백엔드는 [scene-stealer-back](https://github.com/yimsNEO/scene-stealer-back) 이다. 화면이 쓰는
-API 전체는 [`docs/api-contract.md`](docs/api-contract.md) (백엔드 레포와 같은 사본). 아래는
+API 전체는 [`docs/api-contract.md`](../../docs/api-contract.md) (백엔드 레포와 같은 사본). 아래는
 그중 에이전트가 영상을 올리는 부분이다.
 
 ```http
