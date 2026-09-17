@@ -24,6 +24,13 @@ import { formatAgo, formatClock, formatDuration, localDateKey, localDayRange } f
 
 const MAX_CAMERAS = 8
 
+/**
+ * 격자 행 수. 디자인 2c 는 3열 2행이라 칸이 적어도 2행 크기를 지킨다 — 행을 내용에 맡기면
+ * 카메라 1대일 때 한 행이 화면 높이를 다 먹어 타일이 세로로 늘어나고 영상이 잘린다.
+ * 칸이 7개 이상(카메라 6대 이상 + 추가 칸)이면 3행으로 늘린다.
+ */
+const gridRowsFor = (cells: number): string => (cells > 6 ? 'grid-rows-3' : 'grid-rows-2')
+
 /* --------------------------------------------------------------- 상단 상태 */
 
 const Indicator = ({ tone, children }: { tone: 'good' | 'warn' | 'bad'; children: string }) => (
@@ -427,11 +434,16 @@ export const Live = () => {
         </div>
 
         {tiles.length === 0 ? (
-          <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+          <div className={cn('grid min-h-0 flex-1 grid-cols-3 gap-3', gridRowsFor(1))}>
             <AddCameraSlot remaining={MAX_CAMERAS} onClick={() => navigate('/cameras/add')} />
           </div>
         ) : layout === 'grid' ? (
-          <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-3 gap-3">
+          <div
+            className={cn(
+              'grid min-h-0 flex-1 grid-cols-3 gap-3',
+              gridRowsFor(tiles.length + (tiles.length < MAX_CAMERAS ? 1 : 0)),
+            )}
+          >
             {tiles.map((tile) => (
               <CameraCard
                 key={tile.key}
