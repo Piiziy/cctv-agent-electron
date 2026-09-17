@@ -260,9 +260,11 @@ export const Toggle = ({ checked, onChange, disabled = false, label }: TogglePro
     className={cn(
       'relative inline-block h-6 w-11 shrink-0 rounded-chip transition',
       checked ? 'bg-brand-sub' : 'bg-gray-300',
-      // 쓰러짐 알림처럼 끌 수 없는 토글. 켜진 채로 흐리게 둬서 "켜져 있고
-      // 바꿀 수 없다"를 한 번에 보이게 한다.
-      disabled && 'cursor-not-allowed opacity-50',
+      // 쓰러짐 알림처럼 끌 수 없는 토글. 2g 디자인은 켜진 채 gray/500 으로 칠한다 —
+      // 손잡이는 켜짐 자리에 두고 색만 빼서 "켜져 있지만 바꿀 수 없다"를 보인다.
+      disabled && 'cursor-not-allowed',
+      disabled && checked && 'bg-gray-500',
+      disabled && !checked && 'opacity-50',
     )}
   >
     <span
@@ -606,7 +608,7 @@ export const Notice = ({
 }) => (
   <div
     className={cn(
-      'rounded-card px-4 py-3 text-body-sm',
+      'rounded-card px-4 py-3 text-body-sm leading-normal',
       tone === 'info' && 'bg-blue-50 text-blue-800',
       // 경고는 위험도 '보통'과 같은 색을 쓴다 — 화면 안에서 같은 무게로 읽혀야 한다.
       tone === 'warn' && 'bg-risk-medium-surface text-risk-medium-text',

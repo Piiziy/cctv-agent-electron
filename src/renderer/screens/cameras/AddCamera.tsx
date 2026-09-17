@@ -559,7 +559,8 @@ export const AddCamera = () => {
           <div className="flex flex-col gap-2">
             <SubLabel main="화질" />
             <div className="flex gap-2">
-              {profiles.map((profile) => (
+              {/* 표준(서브스트림, 권장)을 먼저 — 카메라가 돌려주는 순서는 제조사마다 다르다. */}
+              {profiles.toSorted((a, b) => Number(b.kind === 'sub') - Number(a.kind === 'sub')).map((profile) => (
                 <QualityCard
                   key={profile.token}
                   profile={profile}

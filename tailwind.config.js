@@ -92,15 +92,16 @@ export default {
         logo: ['Prompt', 'sans-serif'],
       },
       fontSize: {
-        // 디자인시스템 2장 타입 스케일. line-height 를 값에 묶어 둬서
-        // 화면마다 다시 정하지 않게 한다.
-        display: ['40px', { lineHeight: '1.3', fontWeight: '600' }],
-        h1: ['32px', { lineHeight: '1.3', fontWeight: '600' }],
-        h2: ['24px', { lineHeight: '1.4', fontWeight: '600' }],
-        h3: ['20px', { lineHeight: '1.4', fontWeight: '600' }],
-        body: ['16px', { lineHeight: '1.5', fontWeight: '500' }],
-        'body-sm': ['14px', { lineHeight: '1.5', fontWeight: '500' }],
-        caption: ['13px', { lineHeight: '1.5', fontWeight: '400' }],
+        // 디자인시스템 2장 타입 스케일. 줄 높이는 PC 화면 HTML 을 따른다 — 거기엔
+        // line-height 가 없어 Pretendard normal(≈1.19)로 그려진다 (index.css body 참고).
+        // 여러 줄 문단만 leading-normal 을 따로 준다.
+        display: ['40px', { lineHeight: '1.2', fontWeight: '600' }],
+        h1: ['32px', { lineHeight: '1.2', fontWeight: '600' }],
+        h2: ['24px', { lineHeight: '1.2', fontWeight: '600' }],
+        h3: ['20px', { lineHeight: '1.2', fontWeight: '600' }],
+        body: ['16px', { lineHeight: '1.2', fontWeight: '500' }],
+        'body-sm': ['14px', { lineHeight: '1.2', fontWeight: '500' }],
+        caption: ['13px', { lineHeight: '1.2', fontWeight: '400' }],
       },
       spacing: {
         // 페이지 좌우 여백 40 · 내비 높이 76 · 입력 높이 48 (디자인시스템 3·4장)

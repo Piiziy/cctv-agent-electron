@@ -113,7 +113,7 @@ const CameraCard = ({
       )}
     >
       {broken ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 bg-gray-100 text-caption text-gray-600">
+        <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1.5 bg-gray-100 text-caption text-gray-600">
           <span className="text-[20px]">◌</span>
           {state === 'auth-failed'
             ? '비밀번호를 확인해 주세요'
@@ -131,7 +131,8 @@ const CameraCard = ({
           </span>
         </VideoSurface>
       )}
-      <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
+      {/* <button> 의 자식은 flex-col 에서도 폭을 채우지 않는다 — 이름·상태를 양 끝으로 벌리려면 w-full. */}
+      <div className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5">
         <span className="truncate text-[15px] font-semibold">{tile.name}</span>
         <span
           className={cn(
@@ -214,7 +215,7 @@ const FeedItem = ({ event, onOpen }: { event: EventListItem; onOpen: () => void 
           {falsePositive ? '오탐 처리' : STATE_LABEL[event.state]}
         </div>
         {highlight && event.description && (
-          <div className="mt-1 line-clamp-2 text-caption text-gray-700">{event.description}</div>
+          <div className="mt-1 truncate text-caption text-gray-700">{event.description}</div>
         )}
       </div>
     </button>

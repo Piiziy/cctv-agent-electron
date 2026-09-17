@@ -27,6 +27,11 @@
        타임코드(14:32:10)가 1초마다 흔들리지 않게 tabular-nums 를 전역으로 둔다. */
     letter-spacing: -0.01em;
     font-variant-numeric: tabular-nums;
+    /* 디자인 PC 화면 HTML 은 line-height 를 주지 않아 Pretendard 의 normal(≈1.19)로 그려진다.
+       Tailwind preflight 의 1.5 를 그대로 두면 모든 줄이 4~5px 씩 높아져, 2e 표 아래
+       요약·페이지 넘김이 900px 창 밖으로 밀렸다. normal 은 대체 서체마다 달라 숫자로 고정한다.
+       여러 줄 문단은 디자인처럼 leading-normal(1.5) · leading-[1.55] 를 따로 준다. */
+    line-height: 1.2;
   }
 
   /* 매장 PC 에서 드래그로 텍스트가 잡히는 것은 앱답지 않다. 입력 요소만 허용한다. */

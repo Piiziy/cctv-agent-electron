@@ -45,10 +45,21 @@ export const frame = (label: string, tone: 'normal' | 'dark' = 'normal'): string
 
 /* ------------------------------------------------------------------ 시각 */
 
-const todayAt = (hour: number, minute: number, second = 0): string => {
-  const date = new Date()
-  date.setHours(hour, minute, second, 0)
-  return date.toISOString()
+/** 시드 이벤트 중 가장 오래된 것이 몇 분 전인지 (recent(762) 에 여유를 둔 값). */
+const SEED_SPAN_MINUTES = 780
+
+/**
+ * n 분 전. 오늘이 SEED_SPAN_MINUTES 만큼 지나지 않았으면 간격을 같은 비율로 줄여서
+ * 전부 오늘 안에, 순서는 그대로 들어오게 한다 — 새벽에 띄워도 '오늘'이 비지 않게.
+ *
+ * 디자인 화면의 시각(14:32 …)을 그대로 박으면 오전에는 전부 미래 이벤트라, 2f
+ * 조각 타임라인에 조각이 하나도 안 생긴다.
+ */
+const recent = (minutes: number): string => {
+  const now = Date.now()
+  const elapsedToday = now - new Date(now).setHours(0, 0, 0, 0)
+  const scale = Math.min(1, elapsedToday / (SEED_SPAN_MINUTES * 60_000))
+  return new Date(now - minutes * 60_000 * scale).toISOString()
 }
 const addSeconds = (iso: string, seconds: number): string =>
   new Date(Date.parse(iso) + seconds * 1000).toISOString()
@@ -181,10 +192,11 @@ const initialDb = () => ({
       kind: 'theft',
       risk: 'high',
       state: 'unconfirmed',
-      startedAt: todayAt(14, 32, 10),
+      startedAt: recent(20),
       durationSec: 31,
+      // 게이트 계약(docs/ai-gate-contract.md 3.4)대로 설명은 상황만, 인상착의는 따로.
       description:
-        '남성 1명(검은 상의·회색 모자)이 진열대에서 상품 2개를 가방에 넣고 결제 없이 출입문 방향으로 이동. 같은 시각 출입문 카메라에서 퇴장 확인 (14:32:38).',
+        '진열대에서 상품 2개를 가방에 넣고 결제 없이 출입문 방향으로 이동. 같은 시각 출입문 카메라에서 퇴장 확인.',
       appearance: '남성 1명, 검은 상의·회색 모자',
     }),
     event({
@@ -193,7 +205,7 @@ const initialDb = () => ({
       kind: 'loitering',
       risk: 'medium',
       state: 'unconfirmed',
-      startedAt: todayAt(13, 5),
+      startedAt: recent(107),
       durationSec: 720,
       description: '12분간 출입구 근처 서성임',
     }),
@@ -203,7 +215,7 @@ const initialDb = () => ({
       kind: 'dine_and_dash',
       risk: 'medium',
       state: 'confirmed',
-      startedAt: todayAt(11, 40),
+      startedAt: recent(192),
       durationSec: 95,
       description: '취식대에서 음식을 먹은 뒤 결제 없이 퇴장',
     }),
@@ -213,7 +225,7 @@ const initialDb = () => ({
       kind: 'collapse',
       risk: 'high',
       state: 'false_positive',
-      startedAt: todayAt(9, 12),
+      startedAt: recent(340),
       durationSec: 18,
       description: '진열대 앞에서 사람이 바닥에 쓰러짐',
     }),
@@ -223,7 +235,7 @@ const initialDb = () => ({
       kind: 'sleeping',
       risk: 'medium',
       state: 'confirmed',
-      startedAt: todayAt(2, 10),
+      startedAt: recent(762),
       durationSec: 2400,
       description: '심야 취식대에서 40분 취침',
     }),
@@ -259,6 +271,11 @@ export interface MockServer {
   onStreamState(listener: (state: StreamConnectionState) => void): () => void
   /** 개발용 — 새 위험 이벤트를 만들어 SSE 로 흘린다 (2d 팝업 확인). */
   emitRiskEvent(input?: Partial<Pick<EventListItem, 'kind' | 'risk' | 'cameraId'>>): EventListItem
+  /**
+   * 가짜 에이전트가 카메라별로 보고할 상태. 가짜 서버의 카메라 상태와 맞춰서
+   * 2c 의 '재연결 중 · 끊김' 타일이 개발 모드에서도 보이게 한다.
+   */
+  agentCameraState(agentCameraId: string): 'streaming' | 'reconnecting' | 'auth-failed'
 }
 
 const ok = (data: unknown, status = 200): ServerResult => ({ ok: true, status, data })
@@ -517,7 +534,7 @@ export const createMockServer = (): MockServer => {
             gaps:
               cam.locationTag === 'storage'
                 ? [
-                    { from: todayAt(4, 0), to: todayAt(5, 30), reason: 'no_segment' },
+                    { from: recent(300), to: recent(210), reason: 'no_segment' },
                     { from: minutesAgo(11), to: windowEnd.toISOString(), reason: 'no_segment' },
                   ]
                 : [],
@@ -559,10 +576,12 @@ export const createMockServer = (): MockServer => {
           .filter((e) => !params.get('risk') || e.risk === params.get('risk'))
           .filter((e) => !params.get('kind') || e.kind === params.get('kind'))
           .filter((e) => !params.get('cameraId') || e.cameraId === params.get('cameraId'))
-        // 계약 5.1 — 미확인 우선, 그다음 최신순
-        const rank = { unconfirmed: 0, confirmed: 1, false_positive: 2 } as const
+        // 계약 5.1 — 미확인 먼저, 나머지는 상태와 무관하게 최신순. 디자인 2e 에서도
+        // 11:40 확인됨 → 09:12 오탐 → 02:10 확인됨 으로 시각순으로 섞인다.
         const sorted = filtered.toSorted(
-          (a, b) => rank[a.state] - rank[b.state] || Date.parse(b.startedAt) - Date.parse(a.startedAt),
+          (a, b) =>
+            Number(b.state === 'unconfirmed') - Number(a.state === 'unconfirmed') ||
+            Date.parse(b.startedAt) - Date.parse(a.startedAt),
         )
         return ok({ items: sorted.map(toListItem), nextCursor: null })
       },
@@ -701,8 +720,7 @@ export const createMockServer = (): MockServer => {
       state: 'unconfirmed',
       startedAt,
       durationSec: 31,
-      description:
-        '남성 1명(검은 상의·회색 모자)이 진열대에서 상품 2개를 가방에 넣고 결제 없이 출입문 방향으로 이동.',
+      description: '진열대에서 상품 2개를 가방에 넣고 결제 없이 출입문 방향으로 이동.',
       appearance: '남성 1명, 검은 상의·회색 모자',
     })
     state.db = { ...state.db, events: [row, ...state.db.events] }
@@ -749,5 +767,11 @@ export const createMockServer = (): MockServer => {
     },
 
     emitRiskEvent,
+
+    agentCameraState: (agentCameraId) => {
+      const camera = state.db.cameras.find((c) => c.agentCameraId === agentCameraId)
+      if (camera?.state === 'auth_failed') return 'auth-failed'
+      return camera && camera.state !== 'connected' ? 'reconnecting' : 'streaming'
+    },
   }
 }

@@ -23,7 +23,7 @@ import { Button, Notice, Segmented, Spinner, Tag, VideoSurface } from '../../com
 import { useResource } from '../../hooks/useResource'
 import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
-import { KIND_LABEL, RISK_LABEL, RISK_TONE } from '../../lib/labels'
+import { aiDescription, KIND_LABEL, RISK_LABEL, RISK_TONE } from '../../lib/labels'
 import { buildPoliceReport } from '../../lib/police-report'
 import {
   changeEventState,
@@ -583,7 +583,7 @@ export const EventDetailScreen = () => {
             <div className="mt-1 text-gray-700">
               {event.kind === 'unknown'
                 ? 'AI가 아직 어떤 상황인지 분석하고 있습니다. 영상을 직접 확인해 주세요.'
-                : [event.appearance, event.description].filter(Boolean).join('. ') || '설명이 없습니다.'}
+                : aiDescription(event.appearance, event.description) || '설명이 없습니다.'}
             </div>
             {event.appearance && <div className="mt-1.5 text-caption text-gray-600">인상착의는 신고 안내문에 자동 포함</div>}
           </div>

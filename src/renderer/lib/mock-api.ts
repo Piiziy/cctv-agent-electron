@@ -169,7 +169,7 @@ export const createMockApi = (): AgentApi => {
       }))
       publish({ running: true, cameras: entries, upload: 'idle' })
       await delay(600)
-      publish({ cameras: entries.map((e) => ({ ...e, camera: 'streaming' as const })) })
+      publish({ cameras: entries.map((e) => ({ ...e, camera: server.agentCameraState(e.cameraId) })) })
       store.timer = setInterval(() => {
         publish({
           cameras: store.status.cameras.map((c) => ({

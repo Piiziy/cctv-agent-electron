@@ -42,8 +42,10 @@ export const MemoBox = ({
     }
   }
 
+  // 저장 상태는 칸 안 오른쪽 아래에 겹쳐 둔다. 칸 밑에 줄을 따로 두면 2e 오른쪽 패널이
+  // 그만큼(20px) 길어져 900px 창을 넘는다 — 디자인에는 그 줄이 없다.
   return (
-    <div className={cn('flex flex-col gap-1', className)}>
+    <div className={cn('relative', className)}>
       <textarea
         aria-label="메모"
         value={value}
@@ -51,15 +53,21 @@ export const MemoBox = ({
         onBlur={() => void save()}
         placeholder="메모 (예: 112 접수번호 …)"
         className={cn(
-          'min-h-16 resize-none rounded-card bg-surface px-3.5 py-3 text-body-sm font-normal text-gray-900 outline-none',
+          'block min-h-[88px] w-full resize-none rounded-card bg-surface px-3.5 pb-7 pt-3 text-body-sm font-normal text-gray-900 outline-none',
           'shadow-[inset_0_0_0_1px_var(--gray-300)] placeholder:text-gray-600',
           'focus:shadow-[inset_0_0_0_1px_var(--blue-600)]',
         )}
       />
-      <span className="h-4 text-[12px] text-gray-600">
+      <span
+        role="status"
+        className={cn(
+          'pointer-events-none absolute bottom-2 right-3.5 max-w-[calc(100%-1.75rem)] truncate text-[12px] text-gray-600',
+          state === 'error' && 'text-error-main',
+        )}
+      >
         {state === 'saving' && '저장 중…'}
         {state === 'saved' && '저장했습니다'}
-        {state === 'error' && <span className="text-error-main">{error}</span>}
+        {state === 'error' && error}
       </span>
     </div>
   )

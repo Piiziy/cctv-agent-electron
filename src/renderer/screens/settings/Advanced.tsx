@@ -57,7 +57,7 @@ export const Advanced = () => {
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           <div>
             <h1 className="text-h1">고급</h1>
-            <p className="mt-1 text-body-sm font-normal text-gray-600">
+            <p className="mt-1 text-body-sm font-normal leading-normal text-gray-600">
               서버 주소 · 토큰 · 기기 ID. 설치 담당자용 설정입니다 — 잘못 바꾸면 감시 영상이 서버로 가지 않습니다.
             </p>
           </div>

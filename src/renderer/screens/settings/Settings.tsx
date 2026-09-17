@@ -43,7 +43,8 @@ const messageOf = (error: unknown, fallback: string): string =>
 /* ------------------------------------------------------------------ 공통 모양 */
 
 const Card = ({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) => (
-  <section className="overflow-hidden rounded-card bg-surface shadow-card">
+  // shrink-0: 스크롤되는 세로 flex 안에서 카드가 줄어들면 overflow-hidden 에 마지막 줄이 잘린다.
+  <section className="shrink-0 overflow-hidden rounded-card bg-surface shadow-card">
     <div className="flex items-center justify-between px-6 pb-2 pt-4">
       <h2 className="text-h3">{title}</h2>
       {aside && <span className="text-caption text-gray-600">{aside}</span>}
@@ -108,6 +109,21 @@ const MiniSegmented = <T extends string>({
   </div>
 )
 
+/** 00:00 ~ 23:59. 한 자리 시(9:00)도 받아 두 자리로 맞춘다. */
+const normalizeClock = (raw: string): string | null => {
+  const match = /^(\d{1,2}):?(\d{2})$/.exec(raw.trim())
+  if (!match) return null
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  if (hour > 23 || minute > 59) return null
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+/**
+ * 시각 입력. 네이티브 <input type="time"> 은 로케일에 따라 '오전 01:00' 으로 그려진다 —
+ * 2g 디자인은 '01:00 – 07:00' 처럼 24시간 글자로 두어서, 평소엔 글자처럼 보이고
+ * 누르면 고칠 수 있는 칸으로 만든다.
+ */
 const TimeInput = ({
   value,
   onCommit,
@@ -116,21 +132,34 @@ const TimeInput = ({
   value: string | null
   onCommit: (next: string) => void
   label: string
-}) => (
-  <input
-    type="time"
-    aria-label={label}
-    defaultValue={value ?? ''}
-    key={value ?? ''}
-    onBlur={(event) => {
-      if (event.target.value && event.target.value !== value) onCommit(event.target.value)
-    }}
-    className={cn(
-      'h-9 rounded-small bg-surface px-2 text-body-sm text-gray-900 outline-none',
-      'shadow-[inset_0_0_0_1px_var(--gray-500)] focus:shadow-[inset_0_0_0_1px_var(--blue-600)]',
-    )}
-  />
-)
+}) => {
+  const [invalid, setInvalid] = useState(false)
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      aria-label={label}
+      aria-invalid={invalid}
+      placeholder="00:00"
+      defaultValue={value?.slice(0, 5) ?? ''}
+      key={value ?? ''}
+      maxLength={5}
+      onBlur={(event) => {
+        const next = normalizeClock(event.target.value)
+        setInvalid(next === null && event.target.value !== '')
+        if (next === null) return
+        event.target.value = next
+        if (next !== value?.slice(0, 5)) onCommit(next)
+      }}
+      className={cn(
+        'w-14 rounded-small bg-transparent px-1 py-0.5 text-right text-body-sm font-normal text-gray-600 outline-none',
+        'tabular-nums hover:bg-gray-100 focus:bg-surface focus:text-gray-900',
+        'focus:shadow-[inset_0_0_0_1px_var(--blue-600)]',
+        invalid && 'text-error-main shadow-[inset_0_0_0_1px_var(--error-500)]',
+      )}
+    />
+  )
+}
 
 const SENSITIVITY_OPTIONS: readonly { value: Sensitivity; label: string }[] = [
   { value: 'low', label: '낮음' },
@@ -330,7 +359,7 @@ const HoursSection = () => {
 
 const MobileSection = () => (
   <Card title="모바일 앱 연결">
-    <div className="flex flex-col gap-3 px-6 pb-5 pt-2 text-body-sm font-normal text-gray-700">
+    <div className="flex flex-col gap-3 px-6 pb-5 pt-2 text-body-sm font-normal leading-normal text-gray-700">
       {/* 2a 로그인 카드의 문구를 그대로 쓴다. QR 페어링(요구사항 1.5)은 아직 없다. */}
       <p>모바일 앱과 같은 계정을 쓰면 푸시 알림이 자동으로 연결됩니다.</p>
       <p className="text-gray-600">

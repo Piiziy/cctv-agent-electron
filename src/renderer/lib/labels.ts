@@ -48,6 +48,13 @@ export const KIND_ORDER: readonly Exclude<RiskKind, 'unknown'>[] = [
   'collapse',
 ]
 
+/**
+ * 2d·2f 의 'AI 설명' 한 문단. 디자인은 인상착의를 상황 앞에 붙여 쓰고, 게이트는 둘을
+ * 따로 준다 (docs/ai-gate-contract.md 3.4) — 신고 안내문에는 인상착의만 따로 들어가야 해서.
+ */
+export const aiDescription = (appearance: string | null | undefined, description: string | null | undefined): string =>
+  [appearance, description].filter(Boolean).join('. ')
+
 export const RISK_LABEL: Record<RiskLevel, string> = { high: '높음', medium: '보통', low: '낮음' }
 export const RISK_TONE: Record<RiskLevel, TagTone> = { high: 'high', medium: 'medium', low: 'low' }
 

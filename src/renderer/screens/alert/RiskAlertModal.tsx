@@ -22,7 +22,7 @@ import { Button, Notice } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
-import { KIND_LABEL, RISK_LABEL } from '../../lib/labels'
+import { aiDescription, KIND_LABEL, RISK_LABEL } from '../../lib/labels'
 import { buildPoliceReport } from '../../lib/police-report'
 import { changeEventState, getClip, getEvent, getNearbyCameras, ServerError } from '../../lib/server-api'
 import { formatClockSeconds, isToday, formatShortDateTime } from '../../lib/time'
@@ -155,7 +155,7 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
               <b>AI 설명</b> ·{' '}
               {event.kind === 'unknown'
                 ? 'AI가 아직 어떤 상황인지 분석하고 있습니다. 영상을 직접 확인해 주세요.'
-                : (data?.description ?? event.description ?? '설명이 없습니다.')}
+                : aiDescription(data?.appearance, data?.description ?? event.description) || '설명이 없습니다.'}
             </div>
           </div>
 
