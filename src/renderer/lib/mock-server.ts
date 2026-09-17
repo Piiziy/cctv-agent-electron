@@ -3,7 +3,7 @@
  * 제품 동작에는 관여하지 않는다 — Electron 안에서는 메인 프로세스가 진짜 서버를 부른다.
  *
  * 데이터는 design/씬스틸러 PC 앱.dc.html 화면에 그려진 값 그대로다 (강남 1호점,
- * 계산대 14:32 절도 의심 …). 시각은 오늘 날짜에 붙여서 '오늘 위험 신호'에 뜨게 한다.
+ * 계산대 14:32 위험도 높음 …). 시각은 오늘 날짜에 붙여서 '오늘 위험 신호'에 뜨게 한다.
  *
  * 새 위험 이벤트(2d 팝업)를 보려면 브라우저 콘솔에서:
  *   window.__sceneStealer.emitRiskEvent()
@@ -16,11 +16,9 @@ import type {
   EventHistoryItem,
   EventListItem,
   EventState,
-  KindNotificationSetting,
   LocationTag,
   MonitoringCamera,
   NotificationSettings,
-  RiskKind,
   RiskLevel,
   SegmentSeconds,
   ServerStreamMessage,
@@ -102,38 +100,34 @@ interface EventRow extends EventDetail {
   readonly memo: string | null
 }
 
+/** 위험도가 나오게 하는 점수 (백엔드 규칙: 점수 ÷ 임계값 1.5배 이상 높음, 1.2배 이상 보통). */
+const MOCK_THRESHOLD = 0.6
+const MOCK_SCORE: Record<RiskLevel, number> = { high: 0.96, medium: 0.78, low: 0.66 }
+
 const event = (input: {
   id: string
   cameraId: string
-  kind: RiskKind
   risk: RiskLevel
   state: EventState
   startedAt: string
   durationSec: number
-  description: string | null
-  appearance?: string | null
 }): EventRow => ({
   id: input.id,
   storeId: STORE_GANGNAM,
   cameraId: input.cameraId,
   cameraName: null,
   locationTag: null,
-  kind: input.kind,
   risk: input.risk,
   state: input.state,
   startedAt: input.startedAt,
   endedAt: addSeconds(input.startedAt, input.durationSec),
   durationSec: input.durationSec,
-  description: input.description,
   thumbnailUrl: frame(''),
-  aiGateStatus: 'done',
   createdAt: addSeconds(input.startedAt, input.durationSec + 40),
-  appearance: input.appearance ?? null,
-  boundingBoxes: [{ t: 2, x: 0.38, y: 0.22, w: 0.18, h: 0.56 }],
-  anomalyScore: 0.83,
+  anomalyScore: MOCK_SCORE[input.risk],
+  anomalyThreshold: MOCK_THRESHOLD,
   memo: null,
   falsePositiveReason: null,
-  aiGateError: null,
   clipUrl: null,
   clipExpiresAt: addSeconds(input.startedAt, 30 * 86_400),
   segments: [],
@@ -189,73 +183,51 @@ const initialDb = () => ({
     event({
       id: 'evt-1432',
       cameraId: 'cam-01',
-      kind: 'theft',
       risk: 'high',
       state: 'unconfirmed',
       startedAt: recent(20),
       durationSec: 31,
-      // 게이트 계약(docs/ai-gate-contract.md 3.4)대로 설명은 상황만, 인상착의는 따로.
-      description:
-        '진열대에서 상품 2개를 가방에 넣고 결제 없이 출입문 방향으로 이동. 같은 시각 출입문 카메라에서 퇴장 확인.',
-      appearance: '남성 1명, 검은 상의·회색 모자',
     }),
     event({
       id: 'evt-1305',
       cameraId: 'cam-02',
-      kind: 'loitering',
       risk: 'medium',
       state: 'unconfirmed',
       startedAt: recent(107),
       durationSec: 720,
-      description: '12분간 출입구 근처 서성임',
     }),
     event({
       id: 'evt-1140',
       cameraId: 'cam-04',
-      kind: 'dine_and_dash',
       risk: 'medium',
       state: 'confirmed',
       startedAt: recent(192),
       durationSec: 95,
-      description: '취식대에서 음식을 먹은 뒤 결제 없이 퇴장',
     }),
     event({
       id: 'evt-0912',
       cameraId: 'cam-03',
-      kind: 'collapse',
       risk: 'high',
       state: 'false_positive',
       startedAt: recent(340),
       durationSec: 18,
-      description: '진열대 앞에서 사람이 바닥에 쓰러짐',
     }),
     event({
       id: 'evt-0210',
       cameraId: 'cam-02',
-      kind: 'sleeping',
       risk: 'medium',
       state: 'confirmed',
       startedAt: recent(762),
       durationSec: 2400,
-      description: '심야 취식대에서 40분 취침',
     }),
   ] as readonly EventRow[],
   notifications: {
-    kinds: [
-      { kind: 'theft', enabled: true, sensitivity: 'medium', locked: false },
-      { kind: 'vandalism', enabled: true, sensitivity: 'medium', locked: false },
-      { kind: 'dine_and_dash', enabled: true, sensitivity: 'medium', locked: false },
-      { kind: 'underage_purchase', enabled: true, sensitivity: 'medium', locked: false },
-      { kind: 'loitering', enabled: true, sensitivity: 'low', locked: false },
-      { kind: 'sleeping', enabled: false, sensitivity: 'medium', locked: false },
-      { kind: 'collapse', enabled: true, sensitivity: 'high', locked: true },
-      { kind: 'unknown', enabled: true, sensitivity: 'medium', locked: false },
-    ] as readonly KindNotificationSetting[],
+    minRisk: 'low',
     quietHours: {
       businessHoursHighOnly: true,
       sleepStart: '01:00',
       sleepEnd: '07:00',
-      sleepEmergencyOnly: true,
+      sleepHighOnly: true,
       overrideDndForHigh: true,
     },
   } as NotificationSettings,
@@ -270,7 +242,7 @@ export interface MockServer {
   onStream(listener: (message: ServerStreamMessage) => void): () => void
   onStreamState(listener: (state: StreamConnectionState) => void): () => void
   /** 개발용 — 새 위험 이벤트를 만들어 SSE 로 흘린다 (2d 팝업 확인). */
-  emitRiskEvent(input?: Partial<Pick<EventListItem, 'kind' | 'risk' | 'cameraId'>>): EventListItem
+  emitRiskEvent(input?: Partial<Pick<EventListItem, 'risk' | 'cameraId'>>): EventListItem
   /**
    * 가짜 에이전트가 카메라별로 보고할 상태. 가짜 서버의 카메라 상태와 맞춰서
    * 2c 의 '재연결 중 · 끊김' 타일이 개발 모드에서도 보이게 한다.
@@ -320,15 +292,12 @@ export const createMockServer = (): MockServer => {
       cameraId: row.cameraId,
       cameraName: cam?.name ?? null,
       locationTag: cam?.locationTag ?? null,
-      kind: row.kind,
       risk: row.risk,
       state: row.state,
       startedAt: row.startedAt,
       endedAt: row.endedAt,
       durationSec: row.durationSec,
-      description: row.description,
       thumbnailUrl: row.thumbnailUrl,
-      aiGateStatus: row.aiGateStatus,
       createdAt: row.createdAt,
     }
   }
@@ -529,7 +498,7 @@ export const createMockServer = (): MockServer => {
             locationTag: cam.locationTag,
             events: state.db.events
               .filter((e) => e.cameraId === cam.id && Date.parse(e.startedAt) >= dayStart.getTime() && Date.parse(e.startedAt) < dayEnd.getTime())
-              .map((e) => ({ id: e.id, startedAt: e.startedAt, endedAt: e.endedAt, risk: e.risk, kind: e.kind, state: e.state })),
+              .map((e) => ({ id: e.id, startedAt: e.startedAt, endedAt: e.endedAt, risk: e.risk, state: e.state })),
             // 창고 카메라는 11분 전부터 끊겼다. 새벽에도 한 번 끊겼던 것으로 둔다.
             gaps:
               cam.locationTag === 'storage'
@@ -574,7 +543,6 @@ export const createMockServer = (): MockServer => {
           .filter((e) => !date || new Date(e.startedAt).toDateString() === new Date(`${date}T12:00:00`).toDateString())
           .filter((e) => !params.get('state') || e.state === params.get('state'))
           .filter((e) => !params.get('risk') || e.risk === params.get('risk'))
-          .filter((e) => !params.get('kind') || e.kind === params.get('kind'))
           .filter((e) => !params.get('cameraId') || e.cameraId === params.get('cameraId'))
         // 계약 5.1 — 미확인 먼저, 나머지는 상태와 무관하게 최신순. 디자인 2e 에서도
         // 11:40 확인됨 → 09:12 오탐 → 02:10 확인됨 으로 시각순으로 섞인다.
@@ -696,8 +664,9 @@ export const createMockServer = (): MockServer => {
       method: 'PUT',
       pattern: /^\/stores\/([^/]+)\/notification-settings$/,
       handle: (_m, body) => {
-        const collapse = (body?.kinds ?? []).find((k: KindNotificationSetting) => k.kind === 'collapse')
-        if (collapse && !collapse.enabled) return fail(400, '쓰러짐(응급) 알림은 끌 수 없습니다')
+        if (!['low', 'medium', 'high'].includes(body?.minRisk)) {
+          return fail(400, 'minRisk 는 low / medium / high 중 하나여야 합니다')
+        }
         state.db = { ...state.db, notifications: body }
         return ok(state.db.notifications)
       },
@@ -715,13 +684,10 @@ export const createMockServer = (): MockServer => {
     const row = event({
       id: `evt-live-${state.counter}`,
       cameraId: input.cameraId ?? 'cam-01',
-      kind: input.kind ?? 'theft',
       risk: input.risk ?? 'high',
       state: 'unconfirmed',
       startedAt,
       durationSec: 31,
-      description: '진열대에서 상품 2개를 가방에 넣고 결제 없이 출입문 방향으로 이동.',
-      appearance: '남성 1명, 검은 상의·회색 모자',
     })
     state.db = { ...state.db, events: [row, ...state.db.events] }
     const item = toListItem(row)

@@ -6,20 +6,12 @@
  * 필드명은 계약 그대로 camelCase, 시각은 전부 ISO 8601 UTC 밀리초 Z 문자열이다.
  */
 
-export type RiskKind =
-  | 'theft'
-  | 'vandalism'
-  | 'dine_and_dash'
-  | 'underage_purchase'
-  | 'loitering'
-  | 'sleeping'
-  | 'collapse'
-  /** AI 게이트 미연결/실패. 화면은 '분석 중'으로 그린다 (계약 7절). */
-  | 'unknown'
-
+/**
+ * 위험 종류(절도·배회 …)는 나누지 않는다 — AI 는 '평소와 다른 움직임' 구간과 점수만 주고,
+ * 위험도는 그 점수로 정한다 (계약 7절).
+ */
 export type RiskLevel = 'high' | 'medium' | 'low'
 export type EventState = 'unconfirmed' | 'confirmed' | 'false_positive'
-export type AiGateStatus = 'pending' | 'done' | 'failed' | 'skipped'
 export type LocationTag = 'checkout' | 'entrance' | 'shelf' | 'dining' | 'storage' | 'other'
 export type CameraRuntimeState =
   | 'unknown'
@@ -27,7 +19,6 @@ export type CameraRuntimeState =
   | 'reconnecting'
   | 'disconnected'
   | 'auth_failed'
-export type Sensitivity = 'low' | 'medium' | 'high'
 export type SegmentSeconds = 30 | 60 | 300
 
 /* ------------------------------------------------------------ 매장 · 기기 */
@@ -105,15 +96,12 @@ export interface EventListItem {
   readonly cameraId: string
   readonly cameraName: string | null
   readonly locationTag: LocationTag | null
-  readonly kind: RiskKind
   readonly risk: RiskLevel
   readonly state: EventState
   readonly startedAt: string
   readonly endedAt: string
   readonly durationSec: number | null
-  readonly description: string | null
   readonly thumbnailUrl: string | null
-  readonly aiGateStatus: AiGateStatus
   readonly createdAt: string
 }
 
@@ -133,23 +121,11 @@ export interface EventSegment {
   readonly playbackUrl: string | null
 }
 
-export interface BoundingBox {
-  /** 클립 시작 기준 초 */
-  readonly t: number
-  /** 0~1 정규화 좌표 */
-  readonly x: number
-  readonly y: number
-  readonly w: number
-  readonly h: number
-}
-
 export interface EventDetail extends EventListItem {
-  readonly appearance: string | null
-  readonly boundingBoxes: readonly BoundingBox[] | null
   readonly anomalyScore: number | null
+  readonly anomalyThreshold: number | null
   readonly memo: string | null
   readonly falsePositiveReason: string | null
-  readonly aiGateError: string | null
   readonly clipUrl: string | null
   readonly clipExpiresAt: string | null
   readonly segments: readonly EventSegment[]
@@ -166,7 +142,6 @@ export interface EventQuery {
   readonly from?: string
   readonly to?: string
   readonly cameraId?: string
-  readonly kind?: RiskKind
   readonly risk?: RiskLevel
   readonly state?: EventState
   readonly limit?: number
@@ -188,7 +163,6 @@ export interface TimelineCamera {
     readonly startedAt: string
     readonly endedAt: string
     readonly risk: RiskLevel
-    readonly kind: RiskKind
     readonly state: EventState
   }[]
   /** 영상 없음 구간 — 타임라인이 점선으로 그린다 (계약 5.5). */
@@ -236,24 +210,19 @@ export interface SegmentDto {
 
 /* ------------------------------------------------------------------ 알림 */
 
-export interface KindNotificationSetting {
-  readonly kind: RiskKind
-  readonly enabled: boolean
-  readonly sensitivity: Sensitivity
-  /** 쓰러짐처럼 끌 수 없는 종류. UI 는 disabled 토글로 그린다. */
-  readonly locked: boolean
-}
-
 export interface QuietHours {
   readonly businessHoursHighOnly: boolean
+  /** HH:MM, 매장 벽시계 */
   readonly sleepStart: string | null
   readonly sleepEnd: string | null
-  readonly sleepEmergencyOnly: boolean
+  /** 수면 시간엔 높음만 소리 */
+  readonly sleepHighOnly: boolean
   readonly overrideDndForHigh: boolean
 }
 
 export interface NotificationSettings {
-  readonly kinds: readonly KindNotificationSetting[]
+  /** 이 위험도 이상만 알린다 (2g '알림 받을 위험도'). */
+  readonly minRisk: RiskLevel
   readonly quietHours: QuietHours
 }
 

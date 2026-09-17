@@ -5,7 +5,6 @@
  * HIGHLIGHT_PAD_SEC). 그래서 진행 막대의 빨간 구간은 5초 지점에서 시작한다.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { BoundingBox } from '../../shared/server-types'
 import { cn } from '../lib/cn'
 import { formatClockSeconds } from '../lib/time'
 import { VideoSurface } from './ui'
@@ -21,25 +20,16 @@ interface ClipPlayerProps {
   /** 위험 구간의 절대 시작 시각. 재생 위치를 실제 시각으로 보여준다. */
   readonly startedAt: string
   readonly durationSec: number | null
-  readonly boundingBoxes?: readonly BoundingBox[] | null
   readonly badge?: string
   readonly autoPlay?: boolean
   readonly className?: string
 }
-
-/** 지금 재생 위치에 가장 가까운 박스. 게이트가 준 t 는 위험 구간 시작 기준이다. */
-const nearestBox = (boxes: readonly BoundingBox[], riskTime: number): BoundingBox | null =>
-  boxes.reduce<BoundingBox | null>(
-    (best, box) => (!best || Math.abs(box.t - riskTime) < Math.abs(best.t - riskTime) ? box : best),
-    null,
-  )
 
 export const ClipPlayer = ({
   clipUrl,
   thumbnailUrl,
   startedAt,
   durationSec,
-  boundingBoxes,
   badge,
   autoPlay = true,
   className,
@@ -72,7 +62,6 @@ export const ClipPlayer = ({
   const riskLeft = Math.min(100, (CLIP_PAD_SEC / total) * 100)
   const riskWidth = Math.min(100 - riskLeft, (risk / total) * 100)
   const clock = formatClockSeconds(new Date(Date.parse(startedAt) + (position - CLIP_PAD_SEC) * 1000).toISOString())
-  const box = boundingBoxes && boundingBoxes.length > 0 ? nearestBox(boundingBoxes, position - CLIP_PAD_SEC) : null
   const hasVideo = Boolean(clipUrl) && !failed
 
   return (
@@ -108,19 +97,6 @@ export const ClipPlayer = ({
         <span className="absolute left-3 top-3 rounded-[6px] bg-risk-high px-2.5 py-1 text-[12px] font-semibold text-white">
           {badge}
         </span>
-      )}
-
-      {box && (
-        // 2d — 인물 바운딩박스는 risk/medium 2px 테두리
-        <span
-          className="pointer-events-none absolute rounded-[4px] border-2 border-risk-medium transition-all"
-          style={{
-            left: `${box.x * 100}%`,
-            top: `${box.y * 100}%`,
-            width: `${box.w * 100}%`,
-            height: `${box.h * 100}%`,
-          }}
-        />
       )}
 
       {hasVideo && (

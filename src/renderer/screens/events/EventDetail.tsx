@@ -12,6 +12,8 @@
  *    선택도 넣지 않았다 (쓸 곳이 없다).
  *  - '클립만 저장 · 공유 링크 (7일)' → '클립만 저장'. 공유 링크(5.2)가 아직 없다.
  *  - 플레이어의 '📷 스냅샷'을 뺐다. 요구사항 목록에 없고, 저장할 경로를 따로 열어야 한다.
+ *  - 위험 종류 분류를 하지 않기로 해서 제목은 '이상 행동 · 카메라' 이고 오른쪽 위
+ *    'AI 설명' 칸이 없다 — AI 는 평소와 다른 움직임 구간과 점수만 준다.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -23,7 +25,7 @@ import { Button, Notice, Segmented, Spinner, Tag, VideoSurface } from '../../com
 import { useResource } from '../../hooks/useResource'
 import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
-import { aiDescription, KIND_LABEL, RISK_LABEL, RISK_TONE } from '../../lib/labels'
+import { EVENT_TITLE, RISK_LABEL, RISK_TONE } from '../../lib/labels'
 import { buildPoliceReport } from '../../lib/police-report'
 import {
   changeEventState,
@@ -38,6 +40,7 @@ import {
 import {
   formatClock,
   formatClockSeconds,
+  formatDuration,
   formatFullDateTime,
   formatStamp,
   localDateKey,
@@ -472,11 +475,9 @@ export const EventDetailScreen = () => {
         storeName: store.name,
         address: store.address,
         cameraName: event.cameraName,
-        kindLabel: KIND_LABEL[event.kind],
+        riskLabel: RISK_LABEL[event.risk],
         startedAt: event.startedAt,
         endedAt: event.endedAt,
-        description: event.description,
-        appearance: event.appearance,
       }),
     )
     setNotice({ tone: 'info', text: '112 신고 안내문을 복사했습니다.' })
@@ -502,12 +503,12 @@ export const EventDetailScreen = () => {
           ‹
         </button>
         <h1 className="text-h2">
-          {KIND_LABEL[event.kind]} · {event.cameraName ?? '카메라'}
+          {EVENT_TITLE} · {event.cameraName ?? '카메라'}
         </h1>
         <Tag tone={RISK_TONE[event.risk]}>{RISK_LABEL[event.risk]}</Tag>
         <span className="text-body-sm font-normal text-gray-600">
           {formatFullDateTime(event.startedAt)} – {formatClockSeconds(event.endedAt)}
-          {event.durationSec !== null && ` (${event.durationSec}초)`}
+          {event.durationSec !== null && ` (${formatDuration(event.durationSec)})`}
         </span>
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" disabled={!previous} onClick={() => previous && navigate(`/events/${previous.id}`)}>
@@ -578,16 +579,6 @@ export const EventDetailScreen = () => {
         </div>
 
         <section className="flex flex-col gap-3 rounded-card bg-surface p-5 shadow-card">
-          <div className="rounded-card bg-gray-100 px-4 py-3.5 text-body-sm font-normal leading-[1.55]">
-            <b>AI 설명</b>
-            <div className="mt-1 text-gray-700">
-              {event.kind === 'unknown'
-                ? 'AI가 아직 어떤 상황인지 분석하고 있습니다. 영상을 직접 확인해 주세요.'
-                : aiDescription(event.appearance, event.description) || '설명이 없습니다.'}
-            </div>
-            {event.appearance && <div className="mt-1.5 text-caption text-gray-600">인상착의는 신고 안내문에 자동 포함</div>}
-          </div>
-
           <div className="flex flex-col gap-1.5">
             <span className="text-body-sm font-semibold">상태</span>
             <Segmented
@@ -614,7 +605,7 @@ export const EventDetailScreen = () => {
             증거 묶음 내보내기
           </Button>
           <p className="-mt-1.5 text-caption leading-normal text-gray-600">
-            선택 범위 영상(카메라별) + 시각·매장 정보·AI 설명 PDF 1장 → 경찰 제출용 폴더. 준비 중인
+            선택 범위 영상(카메라별) + 시각·매장 정보 PDF 1장 → 경찰 제출용 폴더. 준비 중인
             기능이라 지금은 아래 클립 저장과 112 안내문을 써 주세요.
           </p>
           <Button variant="secondary" onClick={() => void saveClip()}>

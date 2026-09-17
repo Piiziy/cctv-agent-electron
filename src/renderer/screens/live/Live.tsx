@@ -18,7 +18,7 @@ import { useResource } from '../../hooks/useResource'
 import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { formatBytes } from '../../lib/format'
-import { KIND_LABEL, RISK_LABEL, SPEED_OPTIONS, STATE_LABEL } from '../../lib/labels'
+import { EVENT_TITLE, RISK_LABEL, SPEED_OPTIONS, STATE_LABEL } from '../../lib/labels'
 import { getMonitoring, listEvents } from '../../lib/server-api'
 import { formatAgo, formatClock, formatDuration, localDateKey, localDayRange } from '../../lib/time'
 
@@ -202,7 +202,7 @@ const FeedItem = ({ event, onOpen }: { event: EventListItem; onOpen: () => void 
               falsePositive && 'text-gray-600 line-through',
             )}
           >
-            {KIND_LABEL[event.kind]}
+            {EVENT_TITLE}
           </span>
           {unconfirmed && (
             <Tag tone={event.risk} className="px-2 py-0.5 text-[11px]">
@@ -214,9 +214,6 @@ const FeedItem = ({ event, onOpen }: { event: EventListItem; onOpen: () => void 
           {event.cameraName ?? '카메라'} · {formatClock(event.startedAt)} ·{' '}
           {falsePositive ? '오탐 처리' : STATE_LABEL[event.state]}
         </div>
-        {highlight && event.description && (
-          <div className="mt-1 truncate text-caption text-gray-700">{event.description}</div>
-        )}
       </div>
     </button>
   )
@@ -289,7 +286,7 @@ const TodayFeed = ({ storeId }: { storeId: string }) => {
     <section className="flex min-h-0 flex-col overflow-hidden rounded-card bg-surface shadow-card">
       <div className="flex items-center justify-between px-5 pb-3 pt-5">
         <h2 className="text-h3">오늘 위험 신호</h2>
-        {unconfirmed.length > 0 && <Tag tone="kind">미확인 {unconfirmed.length}</Tag>}
+        {unconfirmed.length > 0 && <Tag tone="alert">미확인 {unconfirmed.length}</Tag>}
       </div>
       <div className="flex gap-1.5 px-5 pb-3">
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>

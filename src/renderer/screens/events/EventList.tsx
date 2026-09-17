@@ -5,16 +5,13 @@
  * 행 클릭 → 오른쪽 미리보기, 더블클릭 → 2f 상세.
  * 타임라인의 점선은 '영상 없음' 구간이다 — "그 시간엔 아무 일도 없었다"와 "그 시간은
  * 못 봤다"를 구분해서 보여줘야 사장님이 시스템을 잘못 믿지 않는다 (요구사항 4.4).
+ *
+ * 위험 종류 분류를 하지 않기로 해서 디자인의 '종류' 필터는 '위험도' 필터로, 내용 칸의
+ * '절도 의심 · 설명' 은 '이상 행동 · 지속 시간' 으로 바꿨다.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type {
-  EventListItem,
-  EventQuery,
-  EventState,
-  RiskKind,
-  TimelineDto,
-} from '../../../shared/server-types'
+import type { EventListItem, EventQuery, EventState, RiskLevel, TimelineDto } from '../../../shared/server-types'
 import { useConnectedStore } from '../../app/session'
 import { useStream, useStreamMessages } from '../../app/stream'
 import { ClipPlayer } from '../../components/ClipPlayer'
@@ -23,7 +20,7 @@ import { Button, Notice, SelectButton, Spinner, Tag, VideoSurface } from '../../
 import { useResource } from '../../hooks/useResource'
 import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
-import { KIND_LABEL, KIND_ORDER, RISK_LABEL, RISK_TONE, STATE_LABEL } from '../../lib/labels'
+import { EVENT_TITLE, RISK_LABEL, RISK_TONE, STATE_LABEL } from '../../lib/labels'
 import {
   changeEventState,
   getClip,
@@ -38,6 +35,7 @@ import {
   formatClock,
   formatClockSeconds,
   formatDateHeader,
+  formatDuration,
   formatShortDateTime,
   localDateKey,
   localDayRange,
@@ -120,8 +118,8 @@ const DayTimeline = ({
                   key={item.id}
                   type="button"
                   onClick={() => onPick(item.id)}
-                  title={`${KIND_LABEL[item.kind]} · ${formatClock(item.startedAt)}`}
-                  aria-label={`${KIND_LABEL[item.kind]} ${formatClock(item.startedAt)}`}
+                  title={`${EVENT_TITLE} · ${formatClock(item.startedAt)}`}
+                  aria-label={`${EVENT_TITLE} ${formatClock(item.startedAt)}`}
                   className={cn(
                     // 31초짜리 이벤트는 하루 폭의 0.04% 라 보이지 않는다. 최소 6px 는 준다.
                     'absolute inset-y-0 min-w-1.5 rounded-[2px] transition hover:brightness-110',
@@ -181,13 +179,12 @@ const Row = ({
       </VideoSurface>
       <span className="min-w-0 truncate">
         {falsePositive ? (
-          <span className="line-through">{KIND_LABEL[event.kind]}</span>
+          <span className="line-through">{EVENT_TITLE}</span>
         ) : (
           <>
-            <b>{KIND_LABEL[event.kind]}</b>
-            {/* 2e 는 확인된 행에도 설명을 붙인다 (02:10 노숙·취침). 있으면 보여준다. */}
-            {event.description && (
-              <span className="text-body-sm font-normal text-gray-600"> · {event.description}</span>
+            <b>{EVENT_TITLE}</b>
+            {event.durationSec !== null && (
+              <span className="text-body-sm font-normal text-gray-600"> · {formatDuration(event.durationSec)}</span>
             )}
           </>
         )}
@@ -287,12 +284,11 @@ const Preview = ({ eventId, onChanged }: { eventId: string; onChanged: (event: E
         thumbnailUrl={data.thumbnailUrl}
         startedAt={data.startedAt}
         durationSec={data.durationSec}
-        boundingBoxes={data.boundingBoxes}
         className="rounded-[10px]"
       />
       <div>
         <div className="flex items-center gap-2">
-          <span className="text-[18px] font-semibold">{KIND_LABEL[data.kind]}</span>
+          <span className="text-[18px] font-semibold">{EVENT_TITLE}</span>
           <Tag tone={RISK_TONE[data.risk]} className="px-2.5 py-0.5 text-[12px]">
             {RISK_LABEL[data.risk]}
           </Tag>
@@ -344,7 +340,7 @@ export const EventList = () => {
   const [dateKey, setDateKey] = useState(localDateKey())
   const [period, setPeriod] = useState<Period>('day')
   const [cameraId, setCameraId] = useState('all')
-  const [kind, setKind] = useState<RiskKind | 'all'>('all')
+  const [risk, setRisk] = useState<RiskLevel | 'all'>('all')
   const [state, setState] = useState<EventState | 'all'>('all')
   // 커서 페이지네이션을 번호 페이지로 보여주려고 페이지마다 시작 커서를 쌓아 둔다.
   const [cursors, setCursors] = useState<readonly (string | undefined)[]>([undefined])
@@ -361,11 +357,11 @@ export const EventList = () => {
       from: start,
       to: end,
       cameraId: cameraId === 'all' ? undefined : cameraId,
-      kind: kind === 'all' ? undefined : kind,
+      risk: risk === 'all' ? undefined : risk,
       state: state === 'all' ? undefined : state,
       limit: PAGE_SIZE,
     }
-  }, [dateKey, period, cameraId, kind, state])
+  }, [dateKey, period, cameraId, risk, state])
 
   // 필터가 바뀌면 첫 페이지부터.
   useEffect(() => {
@@ -468,13 +464,14 @@ export const EventList = () => {
             ]}
           />
           <SelectButton
-            label="종류"
-            value={kind}
-            onChange={setKind}
+            label="위험도"
+            value={risk}
+            onChange={setRisk}
             options={[
               { value: 'all', label: '전체' },
-              ...KIND_ORDER.map((value) => ({ value, label: KIND_LABEL[value] })),
-              { value: 'unknown', label: KIND_LABEL.unknown },
+              { value: 'high', label: RISK_LABEL.high },
+              { value: 'medium', label: RISK_LABEL.medium },
+              { value: 'low', label: RISK_LABEL.low },
             ]}
           />
           <SelectButton

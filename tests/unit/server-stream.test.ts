@@ -80,10 +80,10 @@ describe('createServerStream', () => {
     stream.start('store-1')
     await tick()
 
-    sse.send('event: event.created\ndata: {"id":"e1","kind":"theft"}\n\n')
+    sse.send('event: event.created\ndata: {"id":"e1","risk":"high"}\n\n')
     await until(() => messages.length > 0)
 
-    expect(messages).toEqual([{ type: 'event.created', data: { id: 'e1', kind: 'theft' } }])
+    expect(messages).toEqual([{ type: 'event.created', data: { id: 'e1', risk: 'high' } }])
     stream.stop()
   })
 

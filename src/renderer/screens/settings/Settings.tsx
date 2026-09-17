@@ -9,13 +9,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import type {
-  KindNotificationSetting,
-  LocationTag,
-  NotificationSettings,
-  RiskKind,
-  Sensitivity,
-} from '../../../shared/server-types'
+import type { LocationTag, NotificationSettings, RiskLevel } from '../../../shared/server-types'
 import { useConnectedStore, useSession } from '../../app/session'
 import { Button, Input, Notice, Spinner, Toggle } from '../../components/ui'
 import { POPUP_ALERTS_KEY, usePreference } from '../../hooks/usePreference'
@@ -23,7 +17,7 @@ import { useResource } from '../../hooks/useResource'
 import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { formatBytes } from '../../lib/format'
-import { KIND_ORDER, KIND_SETTING, LOCATION_LABEL, LOCATION_ORDER } from '../../lib/labels'
+import { LOCATION_LABEL, LOCATION_ORDER } from '../../lib/labels'
 import {
   deleteCamera,
   getNotificationSettings,
@@ -99,7 +93,7 @@ const MiniSegmented = <T extends string>({
         disabled={disabled}
         onClick={() => onChange(option.value)}
         className={cn(
-          'flex-1 rounded-[6px] px-2.5 py-[5px] text-center text-caption',
+          'flex-1 whitespace-nowrap rounded-[6px] px-2.5 py-[5px] text-center text-caption',
           option.value === value ? 'bg-surface font-semibold shadow-segment' : 'text-gray-600 hover:text-gray-900',
         )}
       >
@@ -161,10 +155,10 @@ const TimeInput = ({
   )
 }
 
-const SENSITIVITY_OPTIONS: readonly { value: Sensitivity; label: string }[] = [
-  { value: 'low', label: '낮음' },
-  { value: 'medium', label: '보통' },
-  { value: 'high', label: '높음' },
+const MIN_RISK_OPTIONS: readonly { value: RiskLevel; label: string }[] = [
+  { value: 'low', label: '낮음 이상' },
+  { value: 'medium', label: '보통 이상' },
+  { value: 'high', label: '높음만' },
 ]
 
 /* ------------------------------------------------------------------ 알림 */
@@ -187,14 +181,6 @@ const AlertsSection = ({ storeId }: { storeId: string }) => {
       if (previous) settings.mutate(() => previous)
       setError(messageOf(saveError, '알림 설정을 저장하지 못했습니다.'))
     }
-  }
-
-  const setKind = (kind: RiskKind, patch: Partial<KindNotificationSetting>) => {
-    if (!settings.data) return
-    void save({
-      ...settings.data,
-      kinds: settings.data.kinds.map((item) => (item.kind === kind ? { ...item, ...patch } : item)),
-    })
   }
 
   const setQuiet = (patch: Partial<NotificationSettings['quietHours']>) => {
@@ -222,67 +208,25 @@ const AlertsSection = ({ storeId }: { storeId: string }) => {
     )
   }
 
-  const byKind = new Map(settings.data.kinds.map((item) => [item.kind, item]))
-  const quiet = settings.data.quietHours
+  const data = settings.data
+  const quiet = data.quietHours
   const businessHours = store.opensAt && store.closesAt ? `${store.opensAt.slice(0, 5)} – ${store.closesAt.slice(0, 5)}` : null
 
   return (
     <>
       {error && <Notice tone="bad">{error}</Notice>}
+      {/*
+        디자인은 위험 종류 7개를 줄마다 켜고 끄는 표다. 위험 종류 분류를 하지 않기로 해서
+        '이 위험도 이상만 알림' 한 줄로 바꿨다 (위험도는 AI 이상 점수로 정한다).
+      */}
       <Card title="어떤 위험을 알려드릴까요" aside="변경은 즉시 저장됩니다">
-        <div className="grid grid-cols-[1fr_120px_240px] gap-3 border-b border-gray-200 px-6 py-2.5 text-caption font-semibold text-gray-600">
-          <span>위험 종류</span>
-          <span>알림</span>
-          <span>민감도</span>
-        </div>
-        {KIND_ORDER.map((kind, index) => {
-          const item = byKind.get(kind)
-          const meta = KIND_SETTING[kind]
-          const emergency = kind === 'collapse'
-          const enabled = emergency || (item?.enabled ?? true)
-          return (
-            <div
-              key={kind}
-              className={cn(
-                'grid grid-cols-[1fr_120px_240px] items-center gap-3 px-6 py-2 text-[15px]',
-                index < KIND_ORDER.length - 1 && 'border-b border-gray-200',
-              )}
-            >
-              <span className="font-semibold">
-                {meta.label}
-                {meta.hint && (
-                  <span
-                    className={cn(
-                      'ml-1 text-caption',
-                      emergency ? 'font-semibold text-error-main' : 'font-normal text-gray-600',
-                    )}
-                  >
-                    {meta.hint}
-                  </span>
-                )}
-              </span>
-              <span>
-                {/* 쓰러짐은 끌 수 없다 — 켜진 채로 잠근다 (DB 제약과 API 400 이 같이 막는다). */}
-                <Toggle
-                  checked={enabled}
-                  disabled={emergency}
-                  label={`${meta.label} 알림`}
-                  onChange={(next) => setKind(kind, { enabled: next })}
-                />
-              </span>
-              {emergency ? (
-                <span className="text-body-sm font-normal text-gray-600">—</span>
-              ) : (
-                <MiniSegmented
-                  value={item?.sensitivity ?? 'medium'}
-                  options={SENSITIVITY_OPTIONS}
-                  disabled={!enabled}
-                  onChange={(sensitivity) => setKind(kind, { sensitivity })}
-                />
-              )}
-            </div>
-          )
-        })}
+        <Line label="알림 받을 위험도" hint="고른 위험도 이상만 알립니다" last>
+          <MiniSegmented
+            value={data.minRisk}
+            options={MIN_RISK_OPTIONS}
+            onChange={(minRisk) => void save({ ...data, minRisk })}
+          />
+        </Line>
       </Card>
 
       <Card title="알림 방식">
@@ -299,7 +243,7 @@ const AlertsSection = ({ storeId }: { storeId: string }) => {
             label="영업 시간엔 알림 줄이기"
           />
         </Line>
-        <Line label="수면 시간" hint="응급·높음만 소리로">
+        <Line label="수면 시간" hint="높음만 소리로">
           <TimeInput label="수면 시작" value={quiet.sleepStart} onCommit={(sleepStart) => setQuiet({ sleepStart })} />
           <span>–</span>
           <TimeInput label="수면 끝" value={quiet.sleepEnd} onCommit={(sleepEnd) => setQuiet({ sleepEnd })} />

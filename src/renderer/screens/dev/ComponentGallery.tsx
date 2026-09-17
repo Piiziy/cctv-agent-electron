@@ -58,7 +58,7 @@ const BUTTON_VARIANTS: readonly { variant: ButtonVariant; label: string }[] = [
 
 const TAG_TONES: readonly { tone: TagTone; label: string }[] = [
   { tone: 'high', label: '높음' },
-  { tone: 'kind', label: '절도 의심' },
+  { tone: 'alert', label: '미확인 2' },
   { tone: 'medium', label: '보통' },
   { tone: 'low', label: '낮음' },
   { tone: 'unconfirmed', label: '미확인' },
@@ -126,7 +126,7 @@ export const ComponentGallery = () => {
             <span>H2 · 24/600</span>
             <span className="text-h2 text-gray-900">발견된 의심 구간 (3)</span>
             <span>H3 · 20/600</span>
-            <span className="text-h3 text-gray-900">계산대 · 절도 의심</span>
+            <span className="text-h3 text-gray-900">계산대 · 이상 행동</span>
             <span>Body · 16/500</span>
             <span className="text-body text-gray-900">
               AI가 영상을 분석하여 3개의 의심 구간을 발견했습니다.
@@ -245,8 +245,8 @@ export const ComponentGallery = () => {
                 label="알림 끄기"
               />
               <span className="text-body-sm text-gray-600">on / off</span>
-              <Toggle checked disabled onChange={() => undefined} label="쓰러짐(끌 수 없음)" />
-              <span className="text-body-sm text-gray-600">쓰러짐 — 항상 켜짐</span>
+              <Toggle checked disabled onChange={() => undefined} label="잠김 (끌 수 없음)" />
+              <span className="text-body-sm text-gray-600">잠김 — 켜진 채 바꿀 수 없음</span>
             </Row>
             <Segmented
               value={segment}
@@ -264,7 +264,7 @@ export const ComponentGallery = () => {
             <div className="grid grid-cols-2 gap-2.5">
               <CameraTile name="계산대" status="connected" statusLabel="연결됨" badge="CAM 01 · LIVE" />
               <RiskCard
-                kindLabel="절도 의심"
+                title="이상 행동"
                 risk="high"
                 state="unconfirmed"
                 cameraName="계산대"
@@ -278,14 +278,14 @@ export const ComponentGallery = () => {
               />
               <EmptyCameraSlot onClick={() => undefined} />
               <RiskCard
-                kindLabel="장시간 배회"
+                title="이상 행동"
                 risk="medium"
                 state="confirmed"
                 cameraName="진열대"
                 time="11:04"
               />
               <RiskCard
-                kindLabel="분석 중"
+                title="이상 행동"
                 risk="low"
                 state="false_positive"
                 cameraName="출입문"

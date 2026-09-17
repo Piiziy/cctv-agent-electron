@@ -11,6 +11,9 @@
  *    믿고 PC 팝업을 넘기게 만든다.
  *  - '112 신고 안내문' 은 안내문을 클립보드에 복사한다. 클립 링크는 빠진다
  *    (lib/police-report.ts 첫 주석).
+ *
+ * 위험 종류 분류를 하지 않기로 해서, 제목의 '절도 의심' 자리는 '이상 행동' 이고
+ * 'AI 설명' 칸과 인물 박스는 없다 — AI 는 평소와 다른 움직임 구간과 점수만 준다.
  */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -22,10 +25,10 @@ import { Button, Notice } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
-import { aiDescription, KIND_LABEL, RISK_LABEL } from '../../lib/labels'
+import { EVENT_TITLE, RISK_LABEL } from '../../lib/labels'
 import { buildPoliceReport } from '../../lib/police-report'
 import { changeEventState, getClip, getEvent, getNearbyCameras, ServerError } from '../../lib/server-api'
-import { formatClockSeconds, isToday, formatShortDateTime } from '../../lib/time'
+import { formatClockSeconds, formatDuration, isToday, formatShortDateTime } from '../../lib/time'
 
 const SEGMENT_LABEL: Record<number, string> = { 30: '30초', 60: '1분', 300: '5분' }
 
@@ -49,7 +52,6 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
   }, [dismissAlert])
 
   const data = detail.data
-  const kind = KIND_LABEL[event.kind]
   const when = isToday(event.startedAt)
     ? `오늘 ${formatClockSeconds(event.startedAt)}`
     : formatShortDateTime(event.startedAt)
@@ -78,11 +80,9 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
         storeName: store.name,
         address: store.address,
         cameraName: event.cameraName,
-        kindLabel: kind,
+        riskLabel: RISK_LABEL[event.risk],
         startedAt: event.startedAt,
         endedAt: event.endedAt,
-        description: data?.description ?? event.description,
-        appearance: data?.appearance ?? null,
       }),
     )
     setNotice({ tone: 'info', text: '112 신고 안내문을 복사했습니다. 전화 연결 후 그대로 읽어 주세요.' })
@@ -101,7 +101,7 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`위험 감지 — ${kind}`}
+      aria-label={`위험 감지 — ${EVENT_TITLE}`}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(20_35_61/.45)] p-6"
     >
       <div
@@ -112,7 +112,7 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
         )}
       >
         <header className="flex items-center gap-4 bg-risk-high px-6 py-4 text-white">
-          <span className="text-[22px] font-semibold">⚠ 위험 감지 — {kind}</span>
+          <span className="text-[22px] font-semibold">⚠ 위험 감지 — {EVENT_TITLE}</span>
           <span className="text-[15px] opacity-90">
             {event.cameraName ?? '카메라'} · {when} · 위험도 {RISK_LABEL[event.risk]}
           </span>
@@ -133,7 +133,6 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
               thumbnailUrl={event.thumbnailUrl}
               startedAt={event.startedAt}
               durationSec={event.durationSec}
-              boundingBoxes={data?.boundingBoxes}
               badge="위험 구간 · 반복 재생"
             />
             <div className="flex items-center justify-between text-body-sm font-normal text-gray-600">
@@ -145,17 +144,11 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
                 <b>
                   {formatClockSeconds(event.startedAt)} – {formatClockSeconds(event.endedAt)}
                 </b>
-                {event.durationSec !== null && ` (${event.durationSec}초)`}
+                {event.durationSec !== null && ` (${formatDuration(event.durationSec)})`}
               </span>
               <button type="button" className="hover:text-brand-sub" onClick={() => openDetail()}>
                 다음 {segment} 조각 ▸
               </button>
-            </div>
-            <div className="rounded-card bg-gray-100 px-4 py-3.5 text-body-sm font-normal leading-[1.55]">
-              <b>AI 설명</b> ·{' '}
-              {event.kind === 'unknown'
-                ? 'AI가 아직 어떤 상황인지 분석하고 있습니다. 영상을 직접 확인해 주세요.'
-                : aiDescription(data?.appearance, data?.description ?? event.description) || '설명이 없습니다.'}
             </div>
           </div>
 
@@ -164,7 +157,7 @@ export const RiskAlertModal = ({ event }: { event: EventListItem }) => {
               📞 112 신고 안내문
             </Button>
             <p className="-mt-1 text-center text-caption text-gray-600">
-              주소·시각·인상착의가 한 장으로 정리됩니다
+              주소·시각이 한 장으로 정리됩니다
             </p>
             <Button variant="secondary" onClick={() => void saveClip()}>
               클립 저장 · 공유

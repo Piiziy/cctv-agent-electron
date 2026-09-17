@@ -94,7 +94,7 @@ describe('createSseParser', () => {
 
   it('한글이 섞여도 그대로 넘긴다', () => {
     const { events, push } = collect()
-    push('event: event.created\ndata: {"description":"계산대 앞에서 결제 없이 나갔습니다."}\n\n')
-    expect(JSON.parse(events[0]?.data ?? '{}').description).toBe('계산대 앞에서 결제 없이 나갔습니다.')
+    push('event: event.created\ndata: {"cameraName":"계산대 앞 · 진열대 A"}\n\n')
+    expect(JSON.parse(events[0]?.data ?? '{}').cameraName).toBe('계산대 앞 · 진열대 A')
   })
 })

@@ -171,7 +171,7 @@ export type TagTone =
   | 'high'
   | 'medium'
   | 'low'
-  | 'kind' // 위험 종류 ("절도 의심")
+  | 'alert' // 디자인시스템의 빨간 연한 태그 — 미확인 개수 배지
   | 'unconfirmed'
   | 'confirmed'
   | 'false-positive'
@@ -181,7 +181,7 @@ const TAG: Record<TagTone, string> = {
   high: 'bg-risk-high text-white',
   medium: 'bg-risk-medium-surface text-risk-medium-text',
   low: 'bg-gray-100 text-gray-700',
-  kind: 'bg-error-50 text-error-main',
+  alert: 'bg-error-50 text-error-main',
   unconfirmed: 'bg-blue-100 text-brand-sub',
   confirmed: 'bg-success-50 text-success-600',
   'false-positive': 'bg-gray-100 text-gray-600 line-through',
@@ -260,7 +260,7 @@ export const Toggle = ({ checked, onChange, disabled = false, label }: TogglePro
     className={cn(
       'relative inline-block h-6 w-11 shrink-0 rounded-chip transition',
       checked ? 'bg-brand-sub' : 'bg-gray-300',
-      // 쓰러짐 알림처럼 끌 수 없는 토글. 2g 디자인은 켜진 채 gray/500 으로 칠한다 —
+      // 켜진 채 잠긴 토글. 2g 디자인은 켜진 채 gray/500 으로 칠한다 —
       // 손잡이는 켜짐 자리에 두고 색만 빼서 "켜져 있지만 바꿀 수 없다"를 보인다.
       disabled && 'cursor-not-allowed',
       disabled && checked && 'bg-gray-500',
@@ -514,7 +514,7 @@ const RISK_TEXT: Record<RiskLevel, string> = {
 export const riskLabel = (risk: RiskLevel): string => RISK_LABEL[risk]
 
 interface RiskCardProps {
-  readonly kindLabel: string
+  readonly title: string
   readonly risk: RiskLevel
   readonly state: EventState
   readonly cameraName: string
@@ -525,7 +525,7 @@ interface RiskCardProps {
 }
 
 export const RiskCard = ({
-  kindLabel,
+  title,
   risk,
   state,
   cameraName,
@@ -562,7 +562,7 @@ export const RiskCard = ({
           state === 'false_positive' && 'line-through',
         )}
       >
-        <b className="text-gray-900">{kindLabel}</b>
+        <b className="text-gray-900">{title}</b>
         <span className={cn('font-semibold', RISK_TEXT[risk])}>{RISK_LABEL[risk]}</span>
       </div>
       <div className="mt-0.5 text-[12px] text-gray-600">

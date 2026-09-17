@@ -60,12 +60,11 @@ export const useStreamMessages = (handler: Listener): void => {
 /**
  * 팝업으로 띄울 이벤트인가.
  *
- * 높음과 응급(쓰러짐)만 띄운다. 사장님이 계산대에 서 있는 PC 앞에서 '장시간 배회'
- * 마다 창이 앞으로 튀어나오면 곧 알림을 끄거나 무시하게 된다 — 그러면 정작
- * 절도 알림도 안 본다. 보통·낮음은 피드와 배지로 조용히 쌓인다.
+ * 위험도 높음만 띄운다. 사장님이 계산대에 서 있는 PC 앞에서 사소한 움직임마다 창이
+ * 앞으로 튀어나오면 곧 알림을 끄거나 무시하게 된다 — 그러면 정작 큰 일도 안 본다.
+ * 보통·낮음은 피드와 배지로 조용히 쌓인다.
  */
-const shouldPopUp = (event: EventListItem): boolean =>
-  event.state === 'unconfirmed' && (event.risk === 'high' || event.kind === 'collapse')
+const shouldPopUp = (event: EventListItem): boolean => event.state === 'unconfirmed' && event.risk === 'high'
 
 export const StreamProvider = ({ children }: { children: ReactNode }) => {
   const { store } = useSession()

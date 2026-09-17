@@ -537,7 +537,7 @@ export const AddCamera = () => {
             <Input placeholder="예: 계산대" value={name} onChange={(event) => setName(event.target.value)} />
           </div>
           <div className="flex flex-col gap-2">
-            <SubLabel main="위치 태그" hint="AI 판단에 사용" />
+            <SubLabel main="위치 태그" />
             <div className="flex flex-wrap gap-1.5">
               {LOCATION_ORDER.map((tag) => (
                 <button
