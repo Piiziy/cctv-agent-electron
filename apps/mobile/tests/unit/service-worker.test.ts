@@ -20,7 +20,7 @@ interface Notified {
 
 const BASE = '/cctv-agent-electron/m/'
 
-const loadWorker = () => {
+const loadWorker = (base: string = BASE) => {
   const handlers = new Map<string, Handler>()
   const notified: Notified[] = []
   const opened: string[] = []
@@ -30,6 +30,8 @@ const loadWorker = () => {
   const windows: { url: string }[] = []
 
   const self = {
+    // 서비스워커는 자기 주소에서 앱의 기준 경로를 알아낸다. 그 값을 테스트에서도 준다.
+    location: { href: `https://example.com${base}sw.js` },
     addEventListener: (type: string, handler: Handler) => handlers.set(type, handler),
     skipWaiting: () => 'skipped',
     registration: {
@@ -52,7 +54,8 @@ const loadWorker = () => {
   }
 
   const source = readFileSync(resolve(__dirname, '../../public/sw.js'), 'utf8')
-  runInNewContext(source, { self })
+  // 새 컨텍스트에는 Node 전역이 없다. 서비스워커가 실제로 쓰는 것만 넣어 준다.
+  runInNewContext(source, { self, URL })
 
   const fire = async (type: string, event: Record<string, unknown> = {}): Promise<void> => {
     const handler = handlers.get(type)
@@ -152,5 +155,25 @@ describe('서비스워커 — 알림 탭', () => {
       notification: { close, data: { eventId: 'ev/1?x=2' } },
     })
     expect(worker.opened).toEqual([`${BASE}?event=ev%2F1%3Fx%3D2`])
+  })
+})
+
+describe('서비스워커 — 호스팅 경로', () => {
+  const close = () => undefined
+
+  /**
+   * 경로를 빌드 때 심어 넣지 않고 자기 주소에서 알아내는 이유가 이것이다.
+   * GitHub Pages 는 하위 경로, Vercel 은 루트에서 서빙한다.
+   */
+  it.each([
+    ['/cctv-agent-electron/m/', 'GitHub Pages 하위 경로'],
+    ['/m/', 'Vercel 루트'],
+    ['/', '앱이 도메인 루트에 있을 때'],
+  ])('%s 에 올라가도 그 경로로 연다 (%s)', async (base) => {
+    const worker = loadWorker(base)
+    await worker.fire('notificationclick', {
+      notification: { close, data: { eventId: 'ev-1' } },
+    })
+    expect(worker.opened).toEqual([`${base}?event=ev-1`])
   })
 })

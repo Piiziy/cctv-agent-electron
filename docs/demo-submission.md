@@ -21,18 +21,30 @@
 
 ## 제출할 링크
 
-```
-https://piiziy.github.io/cctv-agent-electron/
-```
+Vercel 에 배포한 주소 하나. 이 한 주소 안에 세 가지가 다 있다.
 
-이 한 주소 안에 세 가지가 다 있다. 자세한 구조와 빌드 방법은 [`apps/demo-web/README.md`](../apps/demo-web/README.md).
+```
+/        데모 셸 — 진행 안내와 QR
+/pc/     매장 PC 수집기 화면
+/m/      사장님 모바일 앱
+```
+ 자세한 구조와 빌드 방법은 [`apps/demo-web/README.md`](../apps/demo-web/README.md).
 
 ## 사장님이 하실 일
 
-### 1. GitHub Pages 켜기 (필수 · 2분)
+### 1. Vercel 프로젝트 만들기 (필수 · 3분)
 
-저장소 **Settings → Pages → Source** 를 `GitHub Actions` 로 바꾼다.
-`main` 에 올라가면 워크플로가 알아서 굽고 올린다.
+Vercel 에서 이 저장소를 Import 한다. **Root Directory 를 비워 두는 것**만 지키면 된다 —
+`apps/pc` 같은 하위 폴더로 잡으면 PC 앱만 나오고 데모 셸과 모바일 앱이 빠진다.
+
+| 항목 | 값 |
+|---|---|
+| Root Directory | (비움) |
+| Framework Preset | Other |
+| Build Command · Output Directory | 저장소 루트 `vercel.json` 이 지정한다 — 손대지 않아도 된다 |
+| 환경변수 | 없어도 된다 |
+
+`main` 에 올라갈 때마다 자동으로 다시 굽는다.
 
 ### 2. 잠금화면 알림 켜기 (선택 · 20분)
 
@@ -40,7 +52,7 @@ https://piiziy.github.io/cctv-agent-electron/
 켜면 폰을 주머니에 넣었다 꺼내는 동선까지 체험된다. Firebase 는 필요 없다 — 웹 푸시는 VAPID 만 쓴다.
 
 [`apps/demo-push/README.md`](../apps/demo-push/README.md) 를 따라 Cloudflare Worker 를 올린 뒤,
-저장소 **Settings → Secrets and variables → Actions → Variables** 에 두 개를 넣는다.
+Vercel 프로젝트 **Settings → Environment Variables** 에 두 개를 넣는다.
 
 | 이름 | 값 |
 |---|---|
@@ -56,7 +68,7 @@ cp <받은영상>.mp4 apps/mobile/public/clips/sample.mp4
 git commit -am "chore: 데모 영상 교체" && git push
 ```
 
-푸시하면 워크플로가 다시 굽는다.
+푸시하면 Vercel 이 다시 굽는다.
 
 가짜 카메라에 먹여 **진짜 RTSP 로 잘라 보려면**:
 

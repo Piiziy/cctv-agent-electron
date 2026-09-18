@@ -38,29 +38,46 @@ npm run build -w @scene-stealer/demo-web
 
 | 변수 | 없으면 |
 |---|---|
-| `DEMO_BASE` | `/cctv-agent-electron/` — 사용자 정의 도메인을 쓰면 `/` 로 |
+| `DEMO_BASE` | `/` (도메인 루트). GitHub Pages 처럼 하위 경로일 때만 지정한다 |
 | `DEMO_PUSH_ENDPOINT` | 휴대폰이 **페이지를 열어 둔 동안에만** 알림을 받는다 |
 | `DEMO_VAPID_PUBLIC_KEY` | 위와 같음 |
 | `DEMO_CLIP_URL` | 같이 구운 `m/clips/sample.mp4` 를 쓴다 |
 
-## 배포 — GitHub Pages
+## 배포 — Vercel
 
-`.github/workflows/demo.yml` 이 `main` 에 올라갈 때마다 굽고 올린다. 처음 한 번만 설정이 필요하다.
+저장소 루트의 `vercel.json` 이 빌드 명령과 출력 폴더를 이미 갖고 있다.
+Vercel 에서 이 저장소를 Import 할 때 **Root Directory 를 비워 두기만** 하면 된다.
 
-1. 저장소 **Settings → Pages → Source** 를 `GitHub Actions` 로
-2. (선택) **Settings → Secrets and variables → Actions → Variables** 에 두 개 추가
-   - `DEMO_PUSH_ENDPOINT` — 예: `https://scene-stealer-demo-push.<계정>.workers.dev`
-   - `DEMO_VAPID_PUBLIC_KEY` — `npm run vapid -w @scene-stealer/demo-push` 가 찍어 주는 공개키
+| 항목 | 값 |
+|---|---|
+| Root Directory | (비움 — 저장소 루트) |
+| Framework Preset | Other |
+| Build Command | `vercel.json` 이 지정 (`npm run build -w @scene-stealer/demo-web`) |
+| Output Directory | `vercel.json` 이 지정 (`apps/demo-web/dist`) |
+| 환경변수 | 없어도 됨 |
 
-주소는 `https://piiziy.github.io/cctv-agent-electron/` 가 된다.
+Root Directory 를 `apps/pc` 같은 하위 폴더로 잡으면 안 된다 — PC 앱만 나오고
+데모 셸과 모바일 앱이 빠진다. 워크스페이스라 설치도 루트에서 해야 한다.
 
-> Jekyll 이 `_` 로 시작하는 폴더를 지우기 때문에 빌드가 `.nojekyll` 을 같이 넣는다.
-> Expo 가 번들을 `_expo/` 에 넣으므로 이게 없으면 모바일 앱이 통째로 404 가 된다.
+`vercel.json` 의 rewrite 는 모바일 앱이 SPA 라서 있다. `/m/` 아래 경로는 실제 파일이
+없으면 `index.html` 로 넘겨야 라우터가 받는다 (실제 파일이 있으면 그게 먼저 나간다).
+
+### GitHub Pages 로 가야 한다면
+
+`.github/workflows/demo.yml` 이 예비로 남아 있다. 자동 실행은 꺼 두었으니
+Settings → Pages → Source 를 `GitHub Actions` 로 바꾸고 Actions 탭에서 손으로 실행한다.
+그때는 저장소 하위 경로에 올라가므로 워크플로가 `DEMO_BASE=/cctv-agent-electron/` 를 넘긴다.
 
 ## 잠금화면 알림을 켜려면
 
 없어도 데모는 돈다. 켜면 심사위원이 **폰을 주머니에 넣었다가 꺼내는** 동선을 체험할 수 있다.
-`apps/demo-push/README.md` 를 따라 Cloudflare Worker 를 올린 뒤, 위 2번의 변수 두 개를 넣으면 된다.
+`apps/demo-push/README.md` 를 따라 Cloudflare Worker 를 올린 뒤,
+Vercel 프로젝트 설정의 Environment Variables 에 두 개를 넣는다.
+
+| 이름 | 값 |
+|---|---|
+| `DEMO_PUSH_ENDPOINT` | `https://<워커주소>.workers.dev` |
+| `DEMO_VAPID_PUBLIC_KEY` | `npm run vapid -w @scene-stealer/demo-push` 가 찍어 주는 공개키 |
 Firebase 는 필요 없다 — 웹 푸시는 VAPID 키쌍만 쓴다.
 
 ## 테스트셋 영상 갈아끼우기

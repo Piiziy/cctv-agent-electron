@@ -13,6 +13,10 @@ import {
   vapidAuthorization,
   type SubscriptionKeys,
 } from './push-crypto'
+import { ACK_STATES, type AckEntry, type AckState } from './ack-log'
+
+// wrangler 는 DO 클래스를 main 모듈의 export 에서 찾는다
+export { AckLog } from './ack-log'
 
 /**
  * Workers 런타임 타입을 따로 설치하지 않으려고 쓰는 만큼만 직접 선언한다.
@@ -24,8 +28,19 @@ interface KvNamespace {
   delete(key: string): Promise<void>
 }
 
+interface AckLogStub {
+  fetch(request: Request): Promise<Response>
+}
+
+interface AckLogNamespace {
+  idFromName(name: string): unknown
+  get(id: unknown): AckLogStub
+}
+
 export interface Env {
   readonly SUBS: KvNamespace
+  /** 확인 로그만 DO 다. 나머지는 KV 로 충분하다 — 이유는 ack-log.ts 첫머리에 적어 뒀다. */
+  readonly ACK_LOG: AckLogNamespace
   readonly VAPID_PUBLIC_KEY: string
   /** `wrangler secret put VAPID_PRIVATE_KEY` 로 넣는다. 절대 wrangler.toml 에 두지 않는다. */
   readonly VAPID_PRIVATE_KEY: string
@@ -46,8 +61,6 @@ const CORS_HEADERS: Record<string, string> = {
 }
 
 const SUBSCRIPTION_TTL_SECONDS = 24 * 60 * 60
-/** 심사가 길어져도 로그가 무한히 자라지 않게. 데스크톱은 최근 것만 본다. */
-const ACK_LOG_LIMIT = 50
 /** 데모에서 늦게 도착한 위험 알림은 의미가 없다. 잠깐 끊긴 폰만 따라잡을 만큼만 준다. */
 const PUSH_TTL_SECONDS = 300
 const PAIRING_CODE = /^[A-Z0-9]{6}$/
@@ -67,30 +80,12 @@ const normalizeCode = (value: unknown): string | null => {
 }
 
 const subscriptionKey = (code: string): string => `sub:${code}`
-const ackKey = (code: string): string => `acks:${code}`
-
-const ACK_STATES = ['confirmed', 'false_positive'] as const
-type AckState = (typeof ACK_STATES)[number]
-
-interface AckEntry {
-  readonly eventId: string
-  readonly state: AckState
-  /** 서버 시계로 찍는다 — 폰 시계는 틀어져 있을 수 있고, since 필터가 그 값을 믿고 돈다. */
-  readonly at: string
-}
-
 const isAckState = (value: unknown): value is AckState => ACK_STATES.includes(value as AckState)
 
-/** 폴링은 어떤 경우에도 화면을 깨면 안 된다. 로그가 깨져 있으면 없는 셈 친다. */
-const parseAckLog = (stored: string | null): readonly AckEntry[] => {
-  if (stored === null) return []
-  try {
-    const parsed: unknown = JSON.parse(stored)
-    return Array.isArray(parsed) ? (parsed as AckEntry[]) : []
-  } catch {
-    return []
-  }
-}
+/** 코드마다 DO 인스턴스 하나. 같은 코드면 폰이 쓴 곳과 데스크톱이 읽는 곳이 같아진다. */
+const ackLogFor = (env: Env, code: string): AckLogStub => env.ACK_LOG.get(env.ACK_LOG.idFromName(code))
+
+const ACK_LOG_ORIGIN = 'https://ack-log.internal'
 
 const isSubscription = (value: unknown): value is PushSubscriptionJson => {
   const candidate = value as PushSubscriptionJson | null
@@ -147,12 +142,13 @@ const handleAck = async (request: Request, env: Env): Promise<Response> => {
     return json({ error: 'invalid-state', message: `state 는 ${ACK_STATES.join(' 또는 ')} 다` }, 400)
   }
 
-  const at = new Date().toISOString()
-  // 읽고-고쳐-쓰기라 동시에 두 개가 들어오면 하나가 묻힐 수 있다.
-  // 심사위원 한 명이 누르는 데모에서는 문제되지 않지만, 여러 명이 쓸 거면 저장소를 바꿔야 한다
-  const previous = parseAckLog(await env.SUBS.get(ackKey(code)))
-  const entries = [...previous, { eventId: body.eventId, state: body.state, at }].slice(-ACK_LOG_LIMIT)
-  await env.SUBS.put(ackKey(code), JSON.stringify(entries), { expirationTtl: SUBSCRIPTION_TTL_SECONDS })
+  const stored = await ackLogFor(env, code).fetch(
+    new Request(`${ACK_LOG_ORIGIN}/append`, {
+      method: 'POST',
+      body: JSON.stringify({ eventId: body.eventId, state: body.state }),
+    }),
+  )
+  const { at } = (await stored.json()) as { at: string }
   return json({ ok: true, at })
 }
 
@@ -162,14 +158,17 @@ const handleAcks = async (request: Request, env: Env): Promise<Response> => {
   const code = normalizeCode(url.searchParams.get('code'))
   if (code === null) return json({ acks: [] })
 
-  const entries = parseAckLog(await env.SUBS.get(ackKey(code)))
   const since = url.searchParams.get('since')
-  const sinceMs = since === null ? Number.NaN : Date.parse(since)
-  // since 가 없거나 읽을 수 없으면 전부 준다 — 폴링을 400 으로 끊는 것보다 낫다.
-  // 저장 순서가 곧 시간 순서라 따로 정렬하지 않는다 (오래된 것부터)
-  if (Number.isNaN(sinceMs)) return json({ acks: entries })
-  // 같은 밀리초에 두 개가 들어오면 뒤엣것을 놓친다. 사람이 누르는 속도에서는 일어나지 않는다
-  return json({ acks: entries.filter((entry) => Date.parse(entry.at) > sinceMs) })
+  const query = since === null ? '' : `?since=${encodeURIComponent(since)}`
+  try {
+    const listed = await ackLogFor(env, code).fetch(new Request(`${ACK_LOG_ORIGIN}/list${query}`))
+    const { acks } = (await listed.json()) as { acks: readonly AckEntry[] }
+    return json({ acks })
+  } catch (error) {
+    // 폴링이 화면을 깨는 것보다 낫다. 대신 wrangler tail 에는 남겨서 원인을 볼 수 있게 한다
+    console.error('ack 로그를 못 읽었다', error)
+    return json({ acks: [] })
+  }
 }
 
 const sendWebPush = async (env: Env, subscription: PushSubscriptionJson, payload: unknown): Promise<Response> => {

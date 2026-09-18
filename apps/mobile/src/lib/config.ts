@@ -15,8 +15,11 @@ export const config = {
   pushEndpoint: trim(process.env.EXPO_PUBLIC_PUSH_ENDPOINT).replace(/\/+$/, ''),
   vapidPublicKey: trim(process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY),
 
-  /** GitHub Pages 하위 경로. 서비스워커와 아이콘 주소가 이걸 앞에 달아야 한다. */
-  webBaseUrl: trim(process.env.EXPO_PUBLIC_WEB_BASE_URL) || '/cctv-agent-electron/m',
+  /**
+   * 앱이 올라간 경로. 서비스워커와 아이콘 주소가 이걸 앞에 달아야 한다.
+   * 기본값은 루트('') — 하위 경로에 올릴 때만 빌드가 채워 준다.
+   */
+  webBaseUrl: trim(process.env.EXPO_PUBLIC_WEB_BASE_URL).replace(/\/+$/, ''),
 
   /** 데모 모드 — 심사위원용 페이지. 로그인을 건너뛰고 시나리오를 돌린다. */
   demo: trim(process.env.EXPO_PUBLIC_DEMO) === '1',

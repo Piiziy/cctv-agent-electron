@@ -8,6 +8,8 @@
 ```
 폰 (서비스 워커)  --- POST /subscribe {code, subscription} --->  Worker  --- KV: sub:<code>
 데스크톱 데모     --- POST /notify    {code, title, body}   --->  Worker  --- 암호화 --->  푸시 서비스 --->  폰
+폰 ("확인했어요") --- POST /ack       {code, eventId, state} -->  Worker  --- DO(code)
+데스크톱 데모     --- GET  /acks?code=&since=  (2.5초마다)  --->  Worker  --- DO(code)  ---> 팝업이 닫힌다
 ```
 
 ## FCM 이 아니라 VAPID 인 이유
@@ -41,36 +43,44 @@ Firebase 프로젝트가 없고, 데모 때문에 만들 생각도 없다. Web P
 - `/ack` 은 폰에서 "확인했어요" 를 누른 걸 기록한다. `state` 는 `confirmed` 또는 `false_positive`.
   `at` 은 **서버가** 찍는다 (폰 시계는 못 믿고, `since` 필터가 그 값을 믿고 돈다). 코드당 최근 50개만 남는다.
 - `/acks` 는 데스크톱이 폴링한다. `since` 보다 **엄격히 뒤**엣것만, 오래된 것부터 준다. `since` 가 없거나
-  날짜로 못 읽으면 전부 준다. 모르는 코드·망가진 코드·깨진 로그 전부 `200 { acks: [] }` 다.
+  날짜로 못 읽으면 전부 준다. 모르는 코드·망가진 코드는 물론이고 DO 를 못 부르는 상황에서도
+  `200 { acks: [] }` 다 — 폴링이 화면을 깨면 안 된다 (그 경우 `wrangler tail` 에 에러가 남는다).
 - 구독은 KV 에 24시간만 산다. 데모 끝나면 알아서 사라진다.
 - 모든 응답에 CORS 가 열려 있다 (공개 데모라 origin 을 안 가린다).
 - `410` 이 오면 그 구독은 KV 에서 지워진다. 폰에서 다시 구독해야 한다.
 
-## ⚠️ `/acks` 는 KV 위에 있고, KV 는 이 용도에 안 맞는다
+## 저장소가 두 개인 이유 (KV + Durable Object)
 
-읽어야 할 사람은 **데모를 돌리는 사람**이다.
+| 무엇 | 어디 | 왜 |
+|---|---|---|
+| 구독 (`/subscribe`·`/notify`·`/subscribed`) | KV | 몇 분씩 여유가 있다. 늦게 반영돼도 "연결 대기 중" 으로 보일 뿐이다 |
+| 확인 (`/ack`·`/acks`) | Durable Object | 초 단위로, 기기를 건너, 쓴 직후 읽혀야 한다 |
 
-Workers KV 는 최종 일관성이다. 쓴 값이 다른 colo 에 퍼지는 데 **최대 60초**가 걸리고, 읽은 값은 colo 마다
-**최소 60초** 캐시된다 (`cacheTtl` 하한이 60이라 더 줄일 수 없다). 그런데 우리 패턴은 정확히 그 최악의
-경우다:
+KV 로는 확인 기능이 **무대에서 깨진다.** KV 는 최종 일관성이고 읽은 값이 colo 마다 최소 60초
+캐시된다 (`cacheTtl` 하한이 60이라 못 줄인다). 우리 패턴이 정확히 최악이다:
 
-1. 데스크톱이 `/acks` 를 폴링한다 → 아직 아무것도 없다 → **"비어 있음" 이 그 colo 에 캐시된다**
-2. 심사위원이 폰에서 "확인했어요" 를 누른다 → 폰의 colo 에 쓰인다 (LTE 라 노트북과 다른 colo 일 가능성이 높다)
-3. 데스크톱은 캐시가 만료될 때까지 **계속 빈 배열을 본다**
+1. 데스크톱이 `/acks` 를 먼저 폴링한다 → 아직 없다 → **"비어 있음" 이 그 colo 에 캐시된다**
+2. 심사위원이 폰에서 누른다 → 폰의 colo 에 쓰인다 (LTE 라 노트북과 다른 colo 일 가능성이 높다)
+3. 데스크톱은 캐시가 만료될 때까지 계속 빈 배열을 본다
 
-즉 폴링이 먼저 돌수록 더 늦게 보인다. 최악은 팝업이 **1분 뒤에** 닫히는 것이고, 더 나쁜 건 이게
-**재현이 잘 안 된다**는 점이다 — 같은 colo 에서 테스트하면 멀쩡히 통과한다.
+즉 **폴링이 부지런할수록 더 늦게 보인다.** 그리고 두 기기가 같은 Wi-Fi 면 재현이 안 돼서, 리허설은
+전부 통과하고 무대에서만 깨진다. 그래서 확인 로그만 DO 로 옮겼다 — 페어링 코드마다
+`idFromName(code)` 로 인스턴스 하나를 잡으면 쓰기와 읽기가 같은 객체를 지나므로 쓴 직후 반드시 읽힌다.
 
-다른 경로는 이 문제가 없다. `/subscribe` → `/notify` 는 구독이 몇 분 전에 쓰이고, `/subscribed` 는 늦게
-true 가 돼도 "연결 대기 중" 으로 보일 뿐이다. **확인 팝업만** 초 단위 읽기-쓰기를 요구한다.
+같이 고친 것 두 가지:
 
-**바꾼다면 Durable Object 다** (무료 플랜에 있다). 페어링 코드마다 `idFromName(code)` 로 객체 하나를 잡으면
-쓰기와 읽기가 같은 객체를 지나므로 강한 일관성이 보장되고, 나중에 WebSocket 으로 올리면 폴링 자체가 없어진다.
-차선은 D1 (기본이 단일 프라이머리라 역시 강한 일관성). 둘 다 이 Worker 안에서 `/ack`·`/acks` 만 갈아 끼우면
-되고, 나머지 경로는 KV 그대로 둬도 된다.
+- **동시 쓰기 유실** — 예전엔 JSON 배열 전체를 읽고-고쳐-쓰기였다. 지금은 `INSERT` 한 줄이라 겹쳐도 안 묻힌다.
+- **같은 밀리초** — `at` 이 같으면 `at > since` 필터에 뒤엣것이 영영 안 걸렸다. 지금은 코드 하나 안에서
+  `at` 이 반드시 증가한다 (직전 것과 같은 밀리초면 1ms 를 더한다). 응답 모양은 그대로 ISO 문자열이다.
 
-그때까지는 **`/acks` 가 늦을 수 있다고 보고 화면을 짜라.** 팝업은 확인이 오면 닫히되, 안 와도 심사위원이
-직접 닫을 수 있어야 한다.
+### DO 를 못 만들면
+
+계정 문제든 뭐든 DO 를 못 만들면 **`npm run deploy` 가 실패한다.** 반쯤 배포되는 일은 없다.
+그 경우 잃는 건 **확인 동기화 하나뿐**이다 — 영상·경보·푸시 알림·상세 화면은 서버 없이 도는 것들이라
+전부 그대로 돌아간다. 데모에서 빠지는 건 "폰에서 확인 누르면 PC 팝업이 닫히는" 장면 하나다.
+
+그리고 DO 를 쓰더라도 **팝업이 확인에 의존하게 만들지 마라.** 확인이 오면 닫히되, 안 와도 ✕ 와 Esc 로
+닫을 수 있어야 한다 (PC 앱은 이미 그렇게 돼 있다).
 
 ## 배포
 
@@ -105,7 +115,26 @@ npx wrangler kv namespace create SUBS --preview
 
 > wrangler 3 을 쓰면 명령이 `wrangler kv:namespace create SUBS` 다 (콜론).
 
-### 3. VAPID 키 만들기
+### 3. Durable Object 는 따로 만들 게 없다
+
+`wrangler.toml` 에 이미 들어 있고, 첫 배포 때 마이그레이션이 같이 올라간다:
+
+```toml
+[[durable_objects.bindings]]
+name = "ACK_LOG"
+class_name = "AckLog"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AckLog"]
+```
+
+`new_sqlite_classes` 여야 **무료 플랜**에서 쓸 수 있다 (`new_classes` 는 유료 전용이다). 한 번 배포한
+뒤에는 `tag = "v1"` 을 바꾸거나 지우지 마라 — 마이그레이션 이력이라 어긋나면 배포가 막힌다.
+
+KV 와 달리 미리 만들어 둘 것도, 붙여 넣을 id 도 없다.
+
+### 4. VAPID 키 만들기
 
 ```bash
 npm run vapid
@@ -120,7 +149,7 @@ npm run vapid
 `VAPID_SUBJECT` 도 실제 연락 가능한 값으로 바꾼다 (`mailto:` 또는 https URL). 푸시 서비스가 문제 생겼을 때
 연락할 곳이라, 아무 값이나 넣으면 일부 서비스가 거절한다.
 
-### 4. 배포하고 개인키를 시크릿으로 넣기
+### 5. 배포하고 개인키를 시크릿으로 넣기
 
 ```bash
 npm run deploy
@@ -194,7 +223,7 @@ curl "$WORKER/acks?code=ABC123&since=2026-09-18T07:21:04.512Z"
 # {"acks":[]}   ← 새 확인이 없다
 ```
 
-`/acks` 가 바로 안 바뀌면 위의 KV 일관성 경고를 보라. 버그가 아니라 저장소 성질이다.
+`/ack` 을 쓴 직후 `/acks` 에 바로 보여야 정상이다. 안 보이면 DO 바인딩이 안 붙은 것이니 `npx wrangler tail` 을 보라.
 
 문제가 생기면 로그를 실시간으로 본다:
 
@@ -255,6 +284,7 @@ console.log(JSON.stringify(subscription))
 |---|---|
 | [`src/worker.ts`](src/worker.ts) | 라우팅 · KV · 발송 |
 | [`src/push-crypto.ts`](src/push-crypto.ts) | aes128gcm 암호화 · VAPID JWT (Worker 전역 없이 돌아가서 테스트된다) |
+| [`src/ack-log.ts`](src/ack-log.ts) | 확인 로그 Durable Object (코드당 인스턴스 하나, SQLite) |
 | [`scripts/generate-vapid.mjs`](scripts/generate-vapid.mjs) | VAPID 키 생성 |
 | [`tests/crypto.test.ts`](tests/crypto.test.ts) | RFC 5869 A.1 · RFC 8291 §5 시험 벡터 포함 |
 | [`tests/worker.test.ts`](tests/worker.test.ts) | 가짜 KV · 가짜 푸시 서비스로 라우트 전체. 폰이 푸는 것까지 재현한다 |

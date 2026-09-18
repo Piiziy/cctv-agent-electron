@@ -18,8 +18,11 @@ const demoWeb = resolve(here, '..')
 const repo = resolve(demoWeb, '../..')
 const dist = resolve(demoWeb, 'dist')
 
-/** GitHub Pages 의 하위 경로. 사용자 정의 도메인을 쓰면 '/' 로 바꾼다. */
-const base = process.env.DEMO_BASE ?? '/cctv-agent-electron/'
+/**
+ * 앱이 올라갈 경로. 기본은 도메인 루트다.
+ * GitHub Pages 처럼 저장소 하위 경로에 올릴 때만 DEMO_BASE 로 알려 준다.
+ */
+const base = process.env.DEMO_BASE ?? '/'
 const pushEndpoint = process.env.DEMO_PUSH_ENDPOINT ?? ''
 const vapidKey = process.env.DEMO_VAPID_PUBLIC_KEY ?? ''
 
@@ -54,6 +57,8 @@ run('npx', ['expo', 'export', '-p', 'web', '--output-dir', mobileOut], {
     EXPO_PUBLIC_DEMO: '1',
     EXPO_PUBLIC_PUSH_ENDPOINT: pushEndpoint,
     EXPO_PUBLIC_VAPID_PUBLIC_KEY: vapidKey,
+    // 앱이 올라갈 경로. 정적 자산 주소(EXPO_WEB_BASE_URL)와 런타임 주소(EXPO_PUBLIC_*)가 같아야 한다.
+    EXPO_WEB_BASE_URL: `${base}m`.replace(/\/+$/, ''),
     EXPO_PUBLIC_WEB_BASE_URL: `${base}m`.replace(/\/+$/, ''),
     // 같이 구운 영상을 가리킨다. 테스트셋이 들어오면 apps/mobile/public/clips/ 의 파일만 갈아끼우면 된다.
     EXPO_PUBLIC_CLIP_URL: process.env.DEMO_CLIP_URL ?? `${base}m/clips/sample.mp4`,

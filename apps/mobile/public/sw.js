@@ -5,7 +5,12 @@
  * 브라우저가 깨워 주기 때문이다.
  */
 
-const BASE = '/cctv-agent-electron/m/'
+/**
+ * 앱이 어느 경로에 올라가 있는지 자기 위치에서 알아낸다.
+ * GitHub Pages 는 /cctv-agent-electron/m/, Vercel 은 /m/ 처럼 호스팅마다 다르다 —
+ * 빌드 때 심어 넣으면 호스팅을 바꿀 때마다 여기가 조용히 틀린다.
+ */
+const BASE = new URL('./', self.location.href).pathname
 
 self.addEventListener('install', (event) => {
   // 새 버전을 깔면 기다리지 않고 바로 넘겨받는다 — 데모 중에 구버전이 남으면 곤란하다.

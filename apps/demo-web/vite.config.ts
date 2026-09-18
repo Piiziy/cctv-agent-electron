@@ -1,9 +1,9 @@
 import { defineConfig } from 'vite'
 
-// GitHub Pages 의 저장소 하위 경로에 올라간다. 자산 주소가 이 경로를 알아야 한다.
-export default defineConfig(({ command }) => ({
+// 기본은 도메인 루트. 하위 경로에 올릴 때만 DEMO_BASE 로 알려 준다.
+export default defineConfig(() => ({
   // 개발 중에는 루트에서 띄운다 — 아래 프록시 경로(/pc, /m)와 맞아야 하기 때문이다.
-  base: process.env.DEMO_BASE ?? (command === 'serve' ? '/' : '/cctv-agent-electron/'),
+  base: process.env.DEMO_BASE ?? '/',
   server: {
     port: 5180,
     // 배포본에서는 PC 앱과 모바일 앱이 같은 출처의 하위 폴더에 있다. 셸이 iframe 안을

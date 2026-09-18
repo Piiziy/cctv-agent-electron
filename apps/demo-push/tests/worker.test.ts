@@ -1,5 +1,7 @@
+import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import worker, { type Env } from '../src/worker'
+import { ACK_LOG_LIMIT, ACK_MAX_AGE_MS, AckLog } from '../src/ack-log'
 import {
   base64UrlDecode,
   base64UrlEncode,
@@ -8,6 +10,20 @@ import {
   utf8,
   type Bytes,
 } from '../src/push-crypto'
+
+interface SqliteStatement {
+  all(...bindings: never[]): Record<string, unknown>[]
+  run(...bindings: never[]): unknown
+}
+
+interface SqliteDatabase {
+  prepare(query: string): SqliteStatement
+}
+
+// Vite 가 node:sqlite 를 정적으로 못 풀어서(내장 목록보다 나중에 생겼다) require 로 우회한다
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: new (location: string) => SqliteDatabase
+}
 
 const WORKER_ORIGIN = 'https://demo-push.workers.dev'
 const PUSH_ENDPOINT = 'https://fcm.googleapis.com/fcm/send/fake-endpoint-123'
@@ -42,15 +58,57 @@ const generateVapidKeys = async () => {
 // 키 생성은 한 번이면 된다. 테스트마다 다시 만들 이유가 없다
 const vapid = await generateVapidKeys()
 
+/**
+ * DO 의 SQL 저장소 자리에 진짜 SQLite 를 끼운다 (node:sqlite).
+ * 흉내 낸 쿼리 엔진이 아니라 AckLog 가 실제로 쓰는 SQL 이 그대로 돈다.
+ */
+const createSqlStorage = () => {
+  const db = new DatabaseSync(':memory:')
+  return {
+    exec: (query: string, ...bindings: unknown[]) => {
+      const statement = db.prepare(query)
+      const isSelect = /^\s*SELECT/i.test(query)
+      const rows = isSelect
+        ? (statement.all(...(bindings as never[])) as Record<string, unknown>[])
+        : (statement.run(...(bindings as never[])), [])
+      return { toArray: () => rows }
+    },
+  }
+}
+
+/**
+ * DO 네임스페이스 흉내. 핵심은 하나다 — 같은 코드면 같은 인스턴스를 돌려준다.
+ * 폰의 쓰기와 데스크톱의 읽기가 같은 저장소를 지난다는 것이 KV 에 없던 성질이고, 이 테스트가 그걸 건다.
+ */
+const createAckLogNamespace = () => {
+  const instances = new Map<string, AckLog>()
+  return {
+    instances,
+    namespace: {
+      idFromName: (name: string) => name,
+      get: (id: unknown) => {
+        const name = id as string
+        const existing = instances.get(name)
+        if (existing !== undefined) return existing
+        const created = new AckLog({ storage: { sql: createSqlStorage() } })
+        instances.set(name, created)
+        return created
+      },
+    },
+  }
+}
+
 const createEnv = () => {
   const store = createStore()
+  const ackLog = createAckLogNamespace()
   const env: Env = {
     SUBS: store.kv,
+    ACK_LOG: ackLog.namespace,
     VAPID_PUBLIC_KEY: vapid.publicKey,
     VAPID_PRIVATE_KEY: vapid.privateKey,
     VAPID_SUBJECT: 'mailto:demo@example.com',
   }
-  return { env, store }
+  return { env, store, ackLog }
 }
 
 /**
@@ -123,6 +181,7 @@ const post = (path: string, body: unknown) =>
   })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -490,31 +549,30 @@ describe('POST /ack — 폰에서 "확인했어요" 를 누른 순간', () => {
     await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' })
 
     expect(store.entries.has('sub:ABC123')).toBe(false)
-    expect(store.entries.has('acks:ABC123')).toBe(true)
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    expect(acks).toHaveLength(1)
   })
 
-  it('구독과 같은 24시간 TTL 을 쓴다', async () => {
+  it('확인 로그는 KV 를 건드리지 않는다 — DO 로 옮겼다', async () => {
     const { env, store } = createEnv()
     await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' })
-    expect(store.entries.get('acks:ABC123')?.ttl).toBe(24 * 60 * 60)
+    expect([...store.entries.keys()]).toEqual([])
   })
 
   it('최근 50개만 남긴다', async () => {
-    const { env, store } = createEnv()
-    const many = Array.from({ length: 60 }, (_unused, index) => index)
-    await many.reduce(
-      async (pending, index) => {
-        await pending
-        await ack(env, { code: 'ABC123', eventId: `evt_${index}`, state: 'confirmed' })
-      },
-      Promise.resolve(),
-    )
+    const { env } = createEnv()
+    const many = Array.from({ length: ACK_LOG_LIMIT + 10 }, (_unused, index) => index)
+    await many.reduce(async (pending, index) => {
+      await pending
+      await ack(env, { code: 'ABC123', eventId: `evt_${index}`, state: 'confirmed' })
+    }, Promise.resolve())
 
-    const stored = JSON.parse(store.entries.get('acks:ABC123')!.value)
-    expect(stored).toHaveLength(50)
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+
+    expect(acks).toHaveLength(ACK_LOG_LIMIT)
     // 잘려 나가는 건 오래된 쪽이다
-    expect(stored[0].eventId).toBe('evt_10')
-    expect(stored[49].eventId).toBe('evt_59')
+    expect(acks[0].eventId).toBe('evt_10')
+    expect(acks[49].eventId).toBe('evt_59')
   })
 
   it('모르는 state 는 400 이다', async () => {
@@ -613,14 +671,25 @@ describe('GET /acks — 데스크톱이 확인을 기다리는 폴링', () => {
     expect(bodies).toEqual([{ acks: [] }, { acks: [] }, { acks: [] }, { acks: [] }])
   })
 
-  it('로그가 깨져 있어도 빈 배열로 답한다', async () => {
-    const { env, store } = createEnv()
-    store.entries.set('acks:ABC123', { value: '{{{깨진 JSON' })
+  it('DO 를 못 부르면 빈 배열로 답한다 — 폴링이 화면을 깨면 안 된다', async () => {
+    const { env } = createEnv()
+    const broken: Env = {
+      ...env,
+      ACK_LOG: {
+        idFromName: () => 'x',
+        get: () => {
+          throw new Error('Durable Object 를 못 잡았다')
+        },
+      },
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
-    const response = await worker.fetch(get('/acks?code=ABC123'), env)
+    const response = await worker.fetch(get('/acks?code=ABC123'), broken)
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ acks: [] })
+    // 조용히 삼키진 않는다 — wrangler tail 에 남아야 원인을 찾는다
+    expect(console.error).toHaveBeenCalled()
   })
 
   it('CORS 가 붙는다', async () => {
@@ -638,6 +707,152 @@ describe('GET /acks — 데스크톱이 확인을 기다리는 폴링', () => {
     await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' }), env)
 
     expect(store.entries.has('sub:ABC123')).toBe(true)
-    expect(JSON.parse(store.entries.get('acks:ABC123')!.value)).toHaveLength(1)
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    expect(acks).toHaveLength(1)
+  })
+})
+
+describe('Durable Object 로 옮긴 이유가 실제로 지켜지는가', () => {
+  const ack = (env: Env, eventId: string, code = 'ABC123') =>
+    worker.fetch(post('/ack', { code, eventId, state: 'confirmed' }), env)
+
+  const acksOf = async (env: Env, code = 'ABC123', since?: string) => {
+    const query = since === undefined ? '' : `&since=${encodeURIComponent(since)}`
+    const response = await worker.fetch(get(`/acks?code=${code}${query}`), env)
+    return (await response.json()).acks as { eventId: string; at: string }[]
+  }
+
+  it('쓴 직후 바로 읽힌다 — KV 였다면 최대 60초 안 보였다', async () => {
+    const { env } = createEnv()
+    await ack(env, 'evt_1')
+    expect((await acksOf(env)).map((entry) => entry.eventId)).toEqual(['evt_1'])
+  })
+
+  it('같은 코드는 항상 같은 인스턴스로 간다 — 쓰기와 읽기가 만나는 지점이다', async () => {
+    const { env, ackLog } = createEnv()
+    await ack(env, 'evt_1')
+    await acksOf(env)
+    await ack(env, 'evt_2')
+
+    expect([...ackLog.instances.keys()]).toEqual(['ABC123'])
+  })
+
+  it('코드가 다르면 인스턴스도 로그도 갈라진다', async () => {
+    const { env, ackLog } = createEnv()
+    await ack(env, 'evt_a', 'AAAAAA')
+    await ack(env, 'evt_b', 'BBBBBB')
+
+    expect([...ackLog.instances.keys()].sort()).toEqual(['AAAAAA', 'BBBBBB'])
+    expect((await acksOf(env, 'AAAAAA')).map((entry) => entry.eventId)).toEqual(['evt_a'])
+    expect((await acksOf(env, 'BBBBBB')).map((entry) => entry.eventId)).toEqual(['evt_b'])
+  })
+
+  it('대소문자가 달라도 같은 인스턴스다 — 코드 정규화가 DO 이름까지 간다', async () => {
+    const { env, ackLog } = createEnv()
+    await ack(env, 'evt_1', 'abc123')
+    await ack(env, 'evt_2', 'ABC123')
+
+    expect([...ackLog.instances.keys()]).toEqual(['ABC123'])
+    expect((await acksOf(env)).map((entry) => entry.eventId)).toEqual(['evt_1', 'evt_2'])
+  })
+})
+
+describe('고친 것 1 — 같은 밀리초에 들어온 확인이 사라지지 않는다', () => {
+  it('시계가 멈춰 있어도 at 은 반드시 증가한다', async () => {
+    const { env } = createEnv()
+    // 두 확인이 같은 밀리초에 들어온 상황을 만든다. 예전 구현이라면 뒤엣것이 since 필터에 걸려 사라졌다
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-18T07:00:00.000Z'))
+
+    const first = await (await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' }), env)).json()
+    const second = await (await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_2', state: 'confirmed' }), env)).json()
+
+    expect(first.at).toBe('2026-09-18T07:00:00.000Z')
+    expect(second.at).toBe('2026-09-18T07:00:00.001Z')
+    expect(Date.parse(second.at)).toBeGreaterThan(Date.parse(first.at))
+  })
+
+  it('첫 번째를 since 로 주면 두 번째가 보인다 — 이게 실제로 깨졌던 지점이다', async () => {
+    const { env } = createEnv()
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-18T07:00:00.000Z'))
+
+    const first = await (await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' }), env)).json()
+    await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_2', state: 'confirmed' }), env)
+
+    const response = await worker.fetch(get(`/acks?code=ABC123&since=${encodeURIComponent(first.at)}`), env)
+    const { acks } = await response.json()
+
+    expect(acks.map((entry: { eventId: string }) => entry.eventId)).toEqual(['evt_2'])
+  })
+
+  it('한 밀리초에 여러 개가 몰려도 전부 서로 다른 at 을 받는다', async () => {
+    const { env } = createEnv()
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-18T07:00:00.000Z'))
+    const ids = Array.from({ length: 10 }, (_unused, index) => `evt_${index}`)
+
+    await ids.reduce(async (pending, eventId) => {
+      await pending
+      await worker.fetch(post('/ack', { code: 'ABC123', eventId, state: 'confirmed' }), env)
+    }, Promise.resolve())
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    const timestamps = acks.map((entry: { at: string }) => entry.at)
+    expect(new Set(timestamps).size).toBe(10)
+  })
+})
+
+describe('고친 것 2 — 동시에 들어온 확인이 묻히지 않는다', () => {
+  it('한꺼번에 20개가 들어와도 하나도 안 잃는다', async () => {
+    const { env } = createEnv()
+    const ids = Array.from({ length: 20 }, (_unused, index) => `evt_${index}`)
+
+    // 예전엔 읽고-고쳐-쓰기였다. 겹치면 나중 쓰기가 앞선 것을 통째로 덮어썼다
+    await Promise.all(
+      ids.map((eventId) => worker.fetch(post('/ack', { code: 'ABC123', eventId, state: 'confirmed' }), env)),
+    )
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    expect(acks).toHaveLength(20)
+    expect(new Set(acks.map((entry: { eventId: string }) => entry.eventId)).size).toBe(20)
+  })
+
+  it('동시에 들어와도 at 은 전부 다르다', async () => {
+    const { env } = createEnv()
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-18T07:00:00.000Z'))
+    const ids = Array.from({ length: 20 }, (_unused, index) => `evt_${index}`)
+
+    await Promise.all(
+      ids.map((eventId) => worker.fetch(post('/ack', { code: 'ABC123', eventId, state: 'confirmed' }), env)),
+    )
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    expect(new Set(acks.map((entry: { at: string }) => entry.at)).size).toBe(20)
+  })
+})
+
+describe('24시간 지난 확인은 치운다 — DO 에는 TTL 이 없다', () => {
+  it('하루보다 오래된 건 다음 쓰기 때 사라진다', async () => {
+    const { env } = createEnv()
+    const now = Date.parse('2026-09-18T07:00:00.000Z')
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now - ACK_MAX_AGE_MS - 60_000)
+    await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_오래된것', state: 'confirmed' }), env)
+
+    clock.mockReturnValue(now)
+    await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_최근것', state: 'confirmed' }), env)
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    expect(acks.map((entry: { eventId: string }) => entry.eventId)).toEqual(['evt_최근것'])
+  })
+
+  it('하루 안쪽은 남는다', async () => {
+    const { env } = createEnv()
+    const now = Date.parse('2026-09-18T07:00:00.000Z')
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now - ACK_MAX_AGE_MS + 60_000)
+    await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_어제', state: 'confirmed' }), env)
+
+    clock.mockReturnValue(now)
+    await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_지금', state: 'confirmed' }), env)
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    expect(acks.map((entry: { eventId: string }) => entry.eventId)).toEqual(['evt_어제', 'evt_지금'])
   })
 })

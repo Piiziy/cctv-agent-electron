@@ -10,6 +10,17 @@ binding = "SUBS"
 id = "여기에_KV_NAMESPACE_ID"
 preview_id = "여기에_PREVIEW_ID"
 
+# 확인(ack) 로그만 Durable Object 다. KV 는 최종 일관성이라 폰이 쓴 걸 데스크톱이 바로 못 읽는다
+[[durable_objects.bindings]]
+name = "ACK_LOG"
+class_name = "AckLog"
+
+# new_sqlite_classes 여야 무료 플랜에서 쓸 수 있다 (new_classes 는 유료 전용이다).
+# 한 번 배포한 뒤에는 이 tag 를 바꾸거나 지우지 마라 — 마이그레이션 이력이다
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AckLog"]
+
 [vars]
 # npm run vapid 가 찍어 주는 공개키. 공개돼도 되는 값이라 커밋해도 된다
 VAPID_PUBLIC_KEY = ""
