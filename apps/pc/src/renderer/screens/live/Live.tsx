@@ -67,9 +67,31 @@ interface TileModel {
   readonly server: MonitoringCamera | null
 }
 
+const FILL = 'absolute inset-0 size-full object-cover'
+
+/**
+ * 미리보기 원본이 무엇이냐에 따라 그리는 태그가 다르다.
+ * 실제 카메라는 MJPEG 스트림이라 <img> 가 알아서 움직이고, 웹 데모는 파일이라 <video> 가 필요하다.
+ * 주소 모양으로 판단한다 — 화면이 데모인지 아닌지를 알 필요는 없다.
+ */
 const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile' | 'full' }) => {
   const preview = usePreview(camera.rtspUri, { key: `live-${quality}-${camera.id}`, quality })
-  if (preview.url) return <img src={preview.url} alt="" className="absolute inset-0 size-full object-cover" />
+  if (preview.url) {
+    return /\.(mp4|webm)(\?|$)/.test(preview.url) ? (
+      <video
+        src={preview.url}
+        className={FILL}
+        autoPlay
+        loop
+        muted
+        playsInline
+        // autoPlay 속성만으로는 브라우저가 거를 때가 있다. 준비되면 한 번 더 밀어 본다.
+        onLoadedData={(event) => void event.currentTarget.play().catch(() => undefined)}
+      />
+    ) : (
+      <img src={preview.url} alt="" className={FILL} />
+    )
+  }
   if (preview.error) return <span className="px-4 text-center">화면을 불러오지 못했습니다</span>
   return <Spinner className="text-gray-500" />
 }

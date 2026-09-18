@@ -46,6 +46,8 @@ const CORS_HEADERS: Record<string, string> = {
 }
 
 const SUBSCRIPTION_TTL_SECONDS = 24 * 60 * 60
+/** 심사가 길어져도 로그가 무한히 자라지 않게. 데스크톱은 최근 것만 본다. */
+const ACK_LOG_LIMIT = 50
 /** 데모에서 늦게 도착한 위험 알림은 의미가 없다. 잠깐 끊긴 폰만 따라잡을 만큼만 준다. */
 const PUSH_TTL_SECONDS = 300
 const PAIRING_CODE = /^[A-Z0-9]{6}$/
@@ -65,6 +67,30 @@ const normalizeCode = (value: unknown): string | null => {
 }
 
 const subscriptionKey = (code: string): string => `sub:${code}`
+const ackKey = (code: string): string => `acks:${code}`
+
+const ACK_STATES = ['confirmed', 'false_positive'] as const
+type AckState = (typeof ACK_STATES)[number]
+
+interface AckEntry {
+  readonly eventId: string
+  readonly state: AckState
+  /** 서버 시계로 찍는다 — 폰 시계는 틀어져 있을 수 있고, since 필터가 그 값을 믿고 돈다. */
+  readonly at: string
+}
+
+const isAckState = (value: unknown): value is AckState => ACK_STATES.includes(value as AckState)
+
+/** 폴링은 어떤 경우에도 화면을 깨면 안 된다. 로그가 깨져 있으면 없는 셈 친다. */
+const parseAckLog = (stored: string | null): readonly AckEntry[] => {
+  if (stored === null) return []
+  try {
+    const parsed: unknown = JSON.parse(stored)
+    return Array.isArray(parsed) ? (parsed as AckEntry[]) : []
+  } catch {
+    return []
+  }
+}
 
 const isSubscription = (value: unknown): value is PushSubscriptionJson => {
   const candidate = value as PushSubscriptionJson | null
@@ -104,6 +130,46 @@ const handleSubscribed = async (request: Request, env: Env): Promise<Response> =
   // 폴링용이라 코드가 망가져 있어도 200 으로 답한다. 화면은 붙었나 아닌가만 알면 된다
   if (code === null) return json({ subscribed: false })
   return json({ subscribed: (await env.SUBS.get(subscriptionKey(code))) !== null })
+}
+
+/**
+ * 폰에서 "확인했어요" 를 누르면 여기로 온다. 데스크톱 팝업이 그걸 보고 닫힌다 —
+ * 두 화면이 한 제품이라는 걸 보여 주는 유일한 실시간 연결점이다.
+ */
+const handleAck = async (request: Request, env: Env): Promise<Response> => {
+  const body = await readJson(request)
+  const code = normalizeCode(body?.code)
+  if (code === null) return json({ error: 'invalid-code', message: '코드는 영숫자 6자리다' }, 400)
+  if (typeof body?.eventId !== 'string' || body.eventId === '') {
+    return json({ error: 'invalid-event', message: 'eventId 가 필요하다' }, 400)
+  }
+  if (!isAckState(body?.state)) {
+    return json({ error: 'invalid-state', message: `state 는 ${ACK_STATES.join(' 또는 ')} 다` }, 400)
+  }
+
+  const at = new Date().toISOString()
+  // 읽고-고쳐-쓰기라 동시에 두 개가 들어오면 하나가 묻힐 수 있다.
+  // 심사위원 한 명이 누르는 데모에서는 문제되지 않지만, 여러 명이 쓸 거면 저장소를 바꿔야 한다
+  const previous = parseAckLog(await env.SUBS.get(ackKey(code)))
+  const entries = [...previous, { eventId: body.eventId, state: body.state, at }].slice(-ACK_LOG_LIMIT)
+  await env.SUBS.put(ackKey(code), JSON.stringify(entries), { expirationTtl: SUBSCRIPTION_TTL_SECONDS })
+  return json({ ok: true, at })
+}
+
+/** 데스크톱이 몇 초마다 부른다. 뭘 하든 200 으로 답한다. */
+const handleAcks = async (request: Request, env: Env): Promise<Response> => {
+  const url = new URL(request.url)
+  const code = normalizeCode(url.searchParams.get('code'))
+  if (code === null) return json({ acks: [] })
+
+  const entries = parseAckLog(await env.SUBS.get(ackKey(code)))
+  const since = url.searchParams.get('since')
+  const sinceMs = since === null ? Number.NaN : Date.parse(since)
+  // since 가 없거나 읽을 수 없으면 전부 준다 — 폴링을 400 으로 끊는 것보다 낫다.
+  // 저장 순서가 곧 시간 순서라 따로 정렬하지 않는다 (오래된 것부터)
+  if (Number.isNaN(sinceMs)) return json({ acks: entries })
+  // 같은 밀리초에 두 개가 들어오면 뒤엣것을 놓친다. 사람이 누르는 속도에서는 일어나지 않는다
+  return json({ acks: entries.filter((entry) => Date.parse(entry.at) > sinceMs) })
 }
 
 const sendWebPush = async (env: Env, subscription: PushSubscriptionJson, payload: unknown): Promise<Response> => {
@@ -166,7 +232,9 @@ const route = (request: Request, env: Env): Promise<Response> | Response => {
   if (request.method === 'OPTIONS') return empty(204)
   if (request.method === 'GET' && pathname === '/health') return json({ ok: true })
   if (request.method === 'GET' && pathname === '/subscribed') return handleSubscribed(request, env)
+  if (request.method === 'GET' && pathname === '/acks') return handleAcks(request, env)
   if (request.method === 'POST' && pathname === '/subscribe') return handleSubscribe(request, env)
+  if (request.method === 'POST' && pathname === '/ack') return handleAck(request, env)
   if (request.method === 'POST' && pathname === '/notify') return handleNotify(request, env)
   return json({ error: 'method-not-allowed' }, 405)
 }

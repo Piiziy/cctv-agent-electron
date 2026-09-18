@@ -65,14 +65,17 @@
 
           <li class="step" id="step-run">
             <h3><span class="num">2</span> 감시 시작</h3>
-            <p>카메라 5대가 붙고, 30초마다 영상 조각이 잘려 서버로 올라갑니다.</p>
+            <p>카메라 5대가 붙고 영상이 흐릅니다. 30초마다 조각이 잘려 서버로 올라갑니다.</p>
             <button id="start" class="btn primary">▶ 데모 시작</button>
             <ul class="log" id="log" aria-live="polite"></ul>
           </li>
 
           <li class="step" id="step-alert">
             <h3><span class="num">3</span> 위험 감지 → 알림</h3>
-            <p>AI 가 한 조각에서 이상 행동을 찾으면 PC 화면에 경고가 뜨고, 같은 순간 휴대폰으로 알림이 갑니다.</p>
+            <p>
+              영상이 흐르다 이상 행동이 잡히면 PC 화면에 경고가 뜨고, 같은 순간 휴대폰으로 알림이 갑니다.
+              <b>기다리시면 저절로 울립니다.</b> 지금 바로 보시려면 아래 버튼을 누르세요.
+            </p>
             <button id="risk" class="btn danger" disabled>지금 위험 상황 만들기</button>
             <p class="sub" id="alert-status"></p>
           </li>
@@ -80,8 +83,9 @@
 
         <details class="about">
           <summary>이 체험판에서 진짜인 것과 아닌 것</summary>
-          <p><b>진짜:</b> 화면, 영상 조각을 나누고 올리는 흐름, 휴대폰 알림, 확인·오탐 처리가 PC 와 휴대폰 양쪽에 함께 반영되는 동기화.</p>
+          <p><b>진짜:</b> PC 앱과 모바일 앱 화면 그대로, 영상 조각을 나누고 올리는 흐름, 그리고 휴대폰으로 가는 알림(웹 푸시 표준).</p>
           <p><b>흉내:</b> "이 구간이 위험하다"는 AI 판정과 서버 응답. 실제 서비스에서는 영상 분석 서버가 맡는 부분입니다.</p>
+          <p><b>실제 제품과 다른 점:</b> 매장 PC 앱은 카메라와 같은 공유기에 있어야 영상을 받을 수 있어 데스크톱 앱으로 만듭니다. 여기서는 같은 화면을 브라우저에서 가짜 카메라로 돌립니다.</p>
         </details>
       </aside>
     </main>

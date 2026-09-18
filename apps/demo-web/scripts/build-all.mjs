@@ -64,6 +64,10 @@ run('npx', ['expo', 'export', '-p', 'web', '--output-dir', mobileOut], {
 const mobileIndex = resolve(mobileOut, 'index.html')
 if (existsSync(mobileIndex)) cpSync(mobileIndex, resolve(mobileOut, '404.html'))
 
+// PC 앱과 모바일 앱이 같은 영상을 튼다. 두 번 굽지 않게 셸 옆에 한 벌만 둔다.
+const clipsSrc = resolve(repo, 'apps/mobile/public/clips')
+if (existsSync(clipsSrc)) cpSync(clipsSrc, resolve(dist, 'clips'), { recursive: true })
+
 // 3. 데모 셸.
 run('npx', ['vite', 'build'], {
   cwd: demoWeb,

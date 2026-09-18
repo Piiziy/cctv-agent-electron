@@ -428,3 +428,216 @@ describe('POST /notify — 죽은 구독 치우기', () => {
     expect(store.entries.has('sub:ABC123')).toBe(true)
   })
 })
+
+describe('POST /ack — 폰에서 "확인했어요" 를 누른 순간', () => {
+  const ack = (env: Env, message: Record<string, unknown>) => worker.fetch(post('/ack', message), env)
+
+  it('기록하고 서버 시각을 돌려준다', async () => {
+    const { env } = createEnv()
+    const before = Date.now()
+
+    const response = await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' })
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.ok).toBe(true)
+    expect(Date.parse(payload.at)).toBeGreaterThanOrEqual(before)
+    expect(Date.parse(payload.at)).toBeLessThanOrEqual(Date.now())
+  })
+
+  it('쓴 걸 그대로 읽어 낼 수 있다', async () => {
+    const { env } = createEnv()
+    await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' })
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+
+    expect(acks).toHaveLength(1)
+    expect(acks[0]).toMatchObject({ eventId: 'evt_1', state: 'confirmed' })
+    expect(typeof acks[0].at).toBe('string')
+  })
+
+  it('at 은 서버가 찍는다 — 폰이 보낸 값은 무시한다', async () => {
+    const { env } = createEnv()
+    await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed', at: '1999-01-01T00:00:00.000Z' })
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+
+    expect(acks[0].at).not.toBe('1999-01-01T00:00:00.000Z')
+    expect(Date.parse(acks[0].at)).toBeGreaterThan(Date.parse('2020-01-01T00:00:00.000Z'))
+  })
+
+  it('여러 개를 누른 순서대로 쌓는다', async () => {
+    const { env } = createEnv()
+    await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' })
+    await ack(env, { code: 'ABC123', eventId: 'evt_2', state: 'false_positive' })
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+
+    expect(acks.map((entry: { eventId: string }) => entry.eventId)).toEqual(['evt_1', 'evt_2'])
+    expect(acks[1].state).toBe('false_positive')
+  })
+
+  it('코드는 대소문자를 안 가린다 — 구독과 같은 규칙이다', async () => {
+    const { env } = createEnv()
+    await ack(env, { code: 'abc123', eventId: 'evt_1', state: 'confirmed' })
+
+    const { acks } = await (await worker.fetch(get('/acks?code=ABC123'), env)).json()
+    expect(acks).toHaveLength(1)
+  })
+
+  it('구독과 따로 논다 — 푸시 구독이 없어도 확인은 기록된다', async () => {
+    const { env, store } = createEnv()
+    await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' })
+
+    expect(store.entries.has('sub:ABC123')).toBe(false)
+    expect(store.entries.has('acks:ABC123')).toBe(true)
+  })
+
+  it('구독과 같은 24시간 TTL 을 쓴다', async () => {
+    const { env, store } = createEnv()
+    await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' })
+    expect(store.entries.get('acks:ABC123')?.ttl).toBe(24 * 60 * 60)
+  })
+
+  it('최근 50개만 남긴다', async () => {
+    const { env, store } = createEnv()
+    const many = Array.from({ length: 60 }, (_unused, index) => index)
+    await many.reduce(
+      async (pending, index) => {
+        await pending
+        await ack(env, { code: 'ABC123', eventId: `evt_${index}`, state: 'confirmed' })
+      },
+      Promise.resolve(),
+    )
+
+    const stored = JSON.parse(store.entries.get('acks:ABC123')!.value)
+    expect(stored).toHaveLength(50)
+    // 잘려 나가는 건 오래된 쪽이다
+    expect(stored[0].eventId).toBe('evt_10')
+    expect(stored[49].eventId).toBe('evt_59')
+  })
+
+  it('모르는 state 는 400 이다', async () => {
+    const { env, store } = createEnv()
+    const response = await ack(env, { code: 'ABC123', eventId: 'evt_1', state: 'maybe' })
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe('invalid-state')
+    expect(store.entries.has('acks:ABC123')).toBe(false)
+  })
+
+  it('eventId 가 없거나 비면 400 이다', async () => {
+    const { env } = createEnv()
+    const responses = await Promise.all([
+      ack(env, { code: 'ABC123', state: 'confirmed' }),
+      ack(env, { code: 'ABC123', eventId: '', state: 'confirmed' }),
+      ack(env, { code: 'ABC123', eventId: 42, state: 'confirmed' }),
+    ])
+    expect(responses.map((response) => response.status)).toEqual([400, 400, 400])
+  })
+
+  it('코드가 망가져 있으면 400 이다 — 쓰기는 폴링과 달리 틀린 걸 알려 줘야 한다', async () => {
+    const { env } = createEnv()
+    const response = await ack(env, { code: 'AB', eventId: 'evt_1', state: 'confirmed' })
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe('invalid-code')
+  })
+})
+
+describe('GET /acks — 데스크톱이 확인을 기다리는 폴링', () => {
+  const ackAt = async (env: Env, eventId: string) => {
+    const response = await worker.fetch(post('/ack', { code: 'ABC123', eventId, state: 'confirmed' }), env)
+    return (await response.json()).at as string
+  }
+
+  const acksSince = async (env: Env, since?: string) => {
+    const path = since === undefined ? '/acks?code=ABC123' : `/acks?code=ABC123&since=${encodeURIComponent(since)}`
+    const response = await worker.fetch(get(path), env)
+    expect(response.status).toBe(200)
+    return (await response.json()).acks as { eventId: string; at: string }[]
+  }
+
+  it('since 를 안 주면 전부 준다', async () => {
+    const { env } = createEnv()
+    await ackAt(env, 'evt_1')
+    await ackAt(env, 'evt_2')
+    expect((await acksSince(env)).map((entry) => entry.eventId)).toEqual(['evt_1', 'evt_2'])
+  })
+
+  it('since 보다 엄격히 뒤엣것만 준다 — 방금 본 건 다시 안 준다', async () => {
+    const { env } = createEnv()
+    const first = await ackAt(env, 'evt_1')
+    // 같은 밀리초에 겹치지 않게 한 틱 띄운다
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    await ackAt(env, 'evt_2')
+
+    expect((await acksSince(env, first)).map((entry) => entry.eventId)).toEqual(['evt_2'])
+  })
+
+  it('마지막 것을 since 로 주면 빈 배열이다 — 폴링이 도는 정상 상태', async () => {
+    const { env } = createEnv()
+    await ackAt(env, 'evt_1')
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    const last = await ackAt(env, 'evt_2')
+
+    expect(await acksSince(env, last)).toEqual([])
+  })
+
+  it('오래된 것부터 준다', async () => {
+    const { env } = createEnv()
+    await ackAt(env, 'evt_1')
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    await ackAt(env, 'evt_2')
+
+    const acks = await acksSince(env)
+    expect(Date.parse(acks[0]!.at)).toBeLessThan(Date.parse(acks[1]!.at))
+  })
+
+  it('since 가 날짜가 아니면 전부 준다 — 폴링을 끊지 않는다', async () => {
+    const { env } = createEnv()
+    await ackAt(env, 'evt_1')
+    expect((await acksSince(env, '어제')).map((entry) => entry.eventId)).toEqual(['evt_1'])
+  })
+
+  it('확인이 하나도 없으면 빈 배열이다', async () => {
+    const { env } = createEnv()
+    expect(await acksSince(env)).toEqual([])
+  })
+
+  it('모르는 코드·망가진 코드는 200 빈 배열이다 — 에러로 폴링을 끊지 않는다', async () => {
+    const { env } = createEnv()
+    const paths = ['/acks?code=ZZZZZZ', '/acks?code=AB', '/acks?code=ABC12!', '/acks']
+    const responses = await Promise.all(paths.map((path) => worker.fetch(get(path), env)))
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200])
+    const bodies = await Promise.all(responses.map((response) => response.json()))
+    expect(bodies).toEqual([{ acks: [] }, { acks: [] }, { acks: [] }, { acks: [] }])
+  })
+
+  it('로그가 깨져 있어도 빈 배열로 답한다', async () => {
+    const { env, store } = createEnv()
+    store.entries.set('acks:ABC123', { value: '{{{깨진 JSON' })
+
+    const response = await worker.fetch(get('/acks?code=ABC123'), env)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ acks: [] })
+  })
+
+  it('CORS 가 붙는다', async () => {
+    const { env } = createEnv()
+    const response = await worker.fetch(get('/acks?code=ABC123'), env)
+    expect(response.headers.get('access-control-allow-origin')).toBe('*')
+  })
+
+  it('확인 로그는 푸시 발송과 서로 간섭하지 않는다', async () => {
+    const { env, store } = createEnv()
+    const phone = await createPhone()
+    await worker.fetch(post('/subscribe', { code: 'ABC123', subscription: phone.subscription }), env)
+    stubPushService(201)
+    await worker.fetch(post('/notify', { code: 'ABC123', title: 't', body: 'b' }), env)
+    await worker.fetch(post('/ack', { code: 'ABC123', eventId: 'evt_1', state: 'confirmed' }), env)
+
+    expect(store.entries.has('sub:ABC123')).toBe(true)
+    expect(JSON.parse(store.entries.get('acks:ABC123')!.value)).toHaveLength(1)
+  })
+})

@@ -30,15 +30,47 @@ Firebase 프로젝트가 없고, 데모 때문에 만들 생각도 없다. Web P
 | `POST` | `/subscribe` | `{ code, subscription }` | `204` |
 | `POST` | `/notify` | `{ code, title, body, data? }` | `{ sent: true }` · `404` 구독 없음 · `410` 구독 만료 |
 | `GET` | `/subscribed?code=ABC123` | — | `{ subscribed: true \| false }` (항상 `200`) |
+| `POST` | `/ack` | `{ code, eventId, state }` | `{ ok: true, at }` · `400` |
+| `GET` | `/acks?code=ABC123&since=<ISO>` | — | `{ acks: [...] }` (항상 `200`) |
 | `GET` | `/health` | — | `{ ok: true }` |
 
 - `code`: 영숫자 6자리. 대소문자는 안 가린다 (`abc123` == `ABC123`).
 - `subscription`: 브라우저의 `PushSubscription.toJSON()` 그대로 — `{ endpoint, keys: { p256dh, auth } }`.
 - `/subscribed` 는 데스크톱 화면이 폴링해서 "휴대폰이 연결되었습니다" 를 띄우는 데 쓴다. 코드가 망가져
   있어도 `200 { subscribed: false }` 다 — 폴링이 에러로 끊기면 안 되기 때문이다.
+- `/ack` 은 폰에서 "확인했어요" 를 누른 걸 기록한다. `state` 는 `confirmed` 또는 `false_positive`.
+  `at` 은 **서버가** 찍는다 (폰 시계는 못 믿고, `since` 필터가 그 값을 믿고 돈다). 코드당 최근 50개만 남는다.
+- `/acks` 는 데스크톱이 폴링한다. `since` 보다 **엄격히 뒤**엣것만, 오래된 것부터 준다. `since` 가 없거나
+  날짜로 못 읽으면 전부 준다. 모르는 코드·망가진 코드·깨진 로그 전부 `200 { acks: [] }` 다.
 - 구독은 KV 에 24시간만 산다. 데모 끝나면 알아서 사라진다.
 - 모든 응답에 CORS 가 열려 있다 (공개 데모라 origin 을 안 가린다).
 - `410` 이 오면 그 구독은 KV 에서 지워진다. 폰에서 다시 구독해야 한다.
+
+## ⚠️ `/acks` 는 KV 위에 있고, KV 는 이 용도에 안 맞는다
+
+읽어야 할 사람은 **데모를 돌리는 사람**이다.
+
+Workers KV 는 최종 일관성이다. 쓴 값이 다른 colo 에 퍼지는 데 **최대 60초**가 걸리고, 읽은 값은 colo 마다
+**최소 60초** 캐시된다 (`cacheTtl` 하한이 60이라 더 줄일 수 없다). 그런데 우리 패턴은 정확히 그 최악의
+경우다:
+
+1. 데스크톱이 `/acks` 를 폴링한다 → 아직 아무것도 없다 → **"비어 있음" 이 그 colo 에 캐시된다**
+2. 심사위원이 폰에서 "확인했어요" 를 누른다 → 폰의 colo 에 쓰인다 (LTE 라 노트북과 다른 colo 일 가능성이 높다)
+3. 데스크톱은 캐시가 만료될 때까지 **계속 빈 배열을 본다**
+
+즉 폴링이 먼저 돌수록 더 늦게 보인다. 최악은 팝업이 **1분 뒤에** 닫히는 것이고, 더 나쁜 건 이게
+**재현이 잘 안 된다**는 점이다 — 같은 colo 에서 테스트하면 멀쩡히 통과한다.
+
+다른 경로는 이 문제가 없다. `/subscribe` → `/notify` 는 구독이 몇 분 전에 쓰이고, `/subscribed` 는 늦게
+true 가 돼도 "연결 대기 중" 으로 보일 뿐이다. **확인 팝업만** 초 단위 읽기-쓰기를 요구한다.
+
+**바꾼다면 Durable Object 다** (무료 플랜에 있다). 페어링 코드마다 `idFromName(code)` 로 객체 하나를 잡으면
+쓰기와 읽기가 같은 객체를 지나므로 강한 일관성이 보장되고, 나중에 WebSocket 으로 올리면 폴링 자체가 없어진다.
+차선은 D1 (기본이 단일 프라이머리라 역시 강한 일관성). 둘 다 이 Worker 안에서 `/ack`·`/acks` 만 갈아 끼우면
+되고, 나머지 경로는 KV 그대로 둬도 된다.
+
+그때까지는 **`/acks` 가 늦을 수 있다고 보고 화면을 짜라.** 팝업은 확인이 오면 닫히되, 안 와도 심사위원이
+직접 닫을 수 있어야 한다.
 
 ## 배포
 
@@ -146,7 +178,23 @@ curl -i -X POST "$WORKER/notify" \
   -H 'content-type: application/json' \
   -d '{"code":"ZZZZZZ","title":"t","body":"b"}'
 # 404 {"error":"no-subscription",...}
+
+# 폰에서 "확인했어요" 를 누른 것 (폰 앱이 보내는 것과 같은 요청)
+curl -X POST "$WORKER/ack" \
+  -H 'content-type: application/json' \
+  -d '{"code":"ABC123","eventId":"evt_1","state":"confirmed"}'
+# {"ok":true,"at":"2026-09-18T07:21:04.512Z"}
+
+# 데스크톱이 폴링하는 것 — 처음엔 since 없이 전부
+curl "$WORKER/acks?code=ABC123"
+# {"acks":[{"eventId":"evt_1","state":"confirmed","at":"2026-09-18T07:21:04.512Z"}]}
+
+# 그 다음부터는 마지막으로 본 at 을 since 로 넘긴다
+curl "$WORKER/acks?code=ABC123&since=2026-09-18T07:21:04.512Z"
+# {"acks":[]}   ← 새 확인이 없다
 ```
+
+`/acks` 가 바로 안 바뀌면 위의 KV 일관성 경고를 보라. 버그가 아니라 저장소 성질이다.
 
 문제가 생기면 로그를 실시간으로 본다:
 

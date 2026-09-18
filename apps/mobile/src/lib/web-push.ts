@@ -166,3 +166,24 @@ export const onNotificationOpen = (handler: (eventId: string) => void): (() => v
   navigator.serviceWorker.addEventListener('message', listener)
   return () => navigator.serviceWorker.removeEventListener('message', listener)
 }
+
+/**
+ * 휴대폰에서 처리한 것을 매장 PC 에 알린다.
+ * 실패해도 조용히 넘어간다 — 사장님 화면에서는 이미 처리된 것이고,
+ * PC 에 전달이 안 됐다고 해서 여기서 할 일이 더 있는 건 아니다.
+ */
+export const reportAck = async (
+  eventId: string,
+  state: 'confirmed' | 'false_positive',
+): Promise<void> => {
+  if (!isWeb || !config.demo || !config.pushEndpoint) return
+  try {
+    await fetch(`${config.pushEndpoint}/ack`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: pairingCode(), eventId, state }),
+    })
+  } catch {
+    // 네트워크가 없으면 없는 대로 둔다.
+  }
+}

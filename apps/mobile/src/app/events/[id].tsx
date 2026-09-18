@@ -10,6 +10,7 @@ import { Button, Caption, Card, Divider, EmptyState, RiskTag } from '../../compo
 import { useApi } from '../../lib/api'
 import { useStores } from '../../lib/store-context'
 import { EVENT_NAME, clockOf, durationLabel, stateLabel, whenLabel } from '../../lib/format'
+import { reportAck } from '../../lib/web-push'
 
 /**
  * 2j 알림 상세 · 대응.
@@ -58,6 +59,7 @@ export default function EventDetailScreen() {
       setSaving(true)
       try {
         setEvent(await api.setEventState(event.id, state))
+        if (state !== 'unconfirmed') void reportAck(event.id, state)
       } catch {
         Alert.alert('저장하지 못했습니다', '잠시 후 다시 시도해 주세요.')
       } finally {

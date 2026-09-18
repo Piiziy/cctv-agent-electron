@@ -1,6 +1,7 @@
 import type { AgentApi, SessionSummary } from '../../shared/ipc'
 import {
   createDemoHook,
+  demoClipUrl,
   demoConfig,
   demoStatus,
   demoStoreSeed,
@@ -206,6 +207,8 @@ export const createMockApi = (): AgentApi => {
     },
     previewStart: async (_rtspUri, options) => {
       await delay(300)
+      // 데모에서는 실제로 움직이는 영상을 튼다. 심사위원이 가장 먼저 보는 화면이다.
+      if (isDemo) return { ok: true as const, url: demoClipUrl() }
       // 격자 타일마다 다른 화면처럼 보이게 키를 라벨로 쓴다.
       return { ok: true as const, url: options?.key ? frame('LIVE') : PLACEHOLDER }
     },

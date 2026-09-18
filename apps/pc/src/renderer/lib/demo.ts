@@ -47,6 +47,13 @@ export const isDemo = typeof window !== 'undefined' && !window.api && demoReques
 /** 심사위원은 5분을 기다려 주지 않는다. 조각이 짧을수록 위험 알림이 빨리 뜬다. */
 export const DEMO_SEGMENT_SECONDS: SegmentSeconds = 30
 
+/**
+ * 데모에서 카메라 타일이 틀 영상.
+ * 배포본은 `/<base>/pc/` 아래 있으므로 한 칸 올라가면 셸과 모바일이 함께 쓰는 clips 가 있다.
+ * 개발 중(5174 단독)에는 이 파일이 없어서 타일이 예전처럼 정지 화면으로 남는다 — 그래도 괜찮다.
+ */
+export const demoClipUrl = (): string => new URL('../clips/sample.mp4', document.baseURI).pathname
+
 const DEMO_DEVICE_ID = 'agent-demo0001'
 
 export const DEMO_SESSION: SessionSummary = {
@@ -139,6 +146,12 @@ export interface SceneStealerHook {
   stopScenario(): void
   triggerRisk(options?: RiskOptions): TriggeredRisk | null
   onScenario(listener: (step: ScenarioStep) => void): () => void
+  /**
+   * 휴대폰에서 처리한 결과를 이 PC 에도 반영한다.
+   * 사장님이 밖에서 확인을 누르면 매장 PC 의 경고도 같이 내려가야 한다 — 그 한 장면이
+   * 두 앱이 한 제품이라는 걸 보여 준다. 반영에 성공했는지 돌려준다.
+   */
+  applyState(eventId: string, state: 'confirmed' | 'false_positive'): Promise<boolean>
 }
 
 declare global {
@@ -162,6 +175,7 @@ export const inertDemoHook: SceneStealerHook = {
   stopScenario: () => undefined,
   triggerRisk: () => null,
   onScenario: () => () => undefined,
+  applyState: async () => false,
 }
 
 export interface DemoHookDeps {
@@ -241,6 +255,16 @@ export const createDemoHook = ({ server, uploadSegment }: DemoHookDeps): SceneSt
       return () => {
         listeners.delete(listener)
       }
+    },
+
+    applyState: async (eventId, state) => {
+      // source 를 'mobile' 로 남긴다 — 처리 이력에 '휴대폰에서 확인' 이라고 찍혀야 한다.
+      const result = await server.request({
+        method: 'PATCH',
+        path: `/events/${eventId}/state`,
+        body: { state, source: 'mobile' },
+      })
+      return result.ok
     },
   }
 }

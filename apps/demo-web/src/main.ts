@@ -16,6 +16,14 @@ interface ScenarioStep {
   readonly detail?: string
 }
 
+type AckState = 'confirmed' | 'false_positive'
+
+interface Ack {
+  readonly eventId: string
+  readonly state: AckState
+  readonly at: string
+}
+
 interface DemoHook {
   readonly isDemo?: boolean
   startScenario?: () => void
@@ -27,6 +35,7 @@ interface DemoHook {
   }
   emitRiskEvent?: (input?: { risk?: 'high' | 'medium' | 'low' }) => { id: string; cameraName?: string }
   onScenario?: (listener: (step: ScenarioStep) => void) => () => void
+  applyState?: (eventId: string, state: AckState) => Promise<boolean>
 }
 
 const PUSH_ENDPOINT = (import.meta.env.VITE_PUSH_ENDPOINT ?? '').replace(/\/+$/, '')
@@ -133,6 +142,33 @@ const waitForPhone = (onConnected: () => void): (() => void) => {
   }
 }
 
+const ACK_LABEL: Record<AckState, string> = { confirmed: '확인', false_positive: '오탐' }
+
+/**
+ * 휴대폰에서 처리한 것을 받아 이 PC 에도 반영한다.
+ * 서버가 없으면 아무 일도 하지 않는다 — 나머지 시연은 서버 없이도 끝까지 돈다.
+ */
+const watchAcks = (onAck: (ack: Ack) => void): void => {
+  if (!PUSH_ENDPOINT) return
+  const seen = { since: new Date().toISOString() }
+  const poll = async (): Promise<void> => {
+    for (;;) {
+      try {
+        const response = await fetch(`${PUSH_ENDPOINT}/acks?code=${code}&since=${encodeURIComponent(seen.since)}`)
+        const body = (await response.json()) as { acks?: Ack[] }
+        body.acks?.forEach((ack) => {
+          seen.since = ack.at
+          onAck(ack)
+        })
+      } catch {
+        // 잠깐 끊겨도 계속 본다.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+    }
+  }
+  void poll()
+}
+
 const NOTIFY_MESSAGE: Record<NotifyResult, string> = {
   sent: '휴대폰으로 알림을 보냈습니다. 잠금화면을 확인해 주세요.',
   'no-phone': '휴대폰이 아직 연결되지 않았습니다. 1번의 QR 을 먼저 찍어 주세요.',
@@ -159,6 +195,27 @@ const watchViewport = (): void => {
   apply(narrowScreen?.matches ?? false)
   narrowScreen?.addEventListener('change', (event) => apply(event.matches))
 }
+
+/**
+ * 영상 안에서 이상 행동이 일어나는 시각(데모 시작 후 초).
+ * 테스트셋 영상이 들어오면 실제 이상행동이 일어나는 초로 이 숫자만 바꾸면 된다.
+ * 심사위원이 아무것도 누르지 않아도 보고만 있으면 폰이 울리게 하는 것이 목적이다.
+ */
+interface ScheduledAlert {
+  readonly atSeconds: number
+  readonly cameraId: string
+  readonly risk: 'high' | 'medium'
+  /**
+   * 휴대폰 앱이 아는 사건 번호. 두 앱은 같은 뼈대 데이터로 심어져 있어서
+   * ev-1 은 양쪽 모두 '계산대 · 높음' 이다. 그래서 알림을 탭하면 곧바로 그 사건이 열린다.
+   */
+  readonly phoneEventId: string
+}
+
+const ALERT_SCHEDULE: readonly ScheduledAlert[] = [
+  { atSeconds: 14, cameraId: 'cam-01', risk: 'high', phoneEventId: 'ev-1' },
+  { atSeconds: 52, cameraId: 'cam-02', risk: 'medium', phoneEventId: 'ev-2' },
+]
 
 const PC_WIDTH = 1280
 const PC_HEIGHT = 860
@@ -204,6 +261,38 @@ const main = async (): Promise<void> => {
     $('step-phone').classList.add('done')
   })
 
+  const RISK_LABEL = { high: '높음', medium: '보통' } as const
+
+  /** 휴대폰이 아는 번호 → 이 PC 가 만든 번호. 휴대폰에서 처리한 걸 되돌려 반영할 때 쓴다. */
+  const pairedEvents = new Map<string, string>()
+
+  const raiseRisk = async (options: {
+    cameraId?: string
+    risk: 'high' | 'medium'
+    phoneEventId?: string
+  }): Promise<void> => {
+    const event = hook.triggerRisk?.(options)
+    const phoneEventId = options.phoneEventId ?? 'ev-1'
+    if (event) pairedEvents.set(phoneEventId, event.eventId)
+    const camera = event?.cameraName ?? '계산대'
+    const level = RISK_LABEL[options.risk]
+    log(`이상 행동 감지 · ${camera} · 위험도 ${level}`, true)
+    $('step-alert').classList.add('done')
+
+    const status = $('alert-status')
+    status.textContent = '휴대폰으로 알림을 보내는 중…'
+    status.className = 'sub'
+
+    const result = await notifyPhone(
+      `강남 1호점 · ${camera}`,
+      `이상 행동이 감지되었습니다 · 위험도 ${level}`,
+      phoneEventId,
+    )
+    status.textContent = NOTIFY_MESSAGE[result]
+    status.className = result === 'sent' ? 'sub ok' : result === 'failed' ? 'sub warn' : 'sub'
+    riskButton.textContent = '한 번 더 보내기'
+  }
+
   startButton.addEventListener('click', () => {
     startButton.disabled = true
     startButton.textContent = '감시 중…'
@@ -213,29 +302,25 @@ const main = async (): Promise<void> => {
     hook.onScenario?.((step) => log(step.detail ? `${step.label} — ${step.detail}` : step.label))
     hook.startScenario?.()
     log('카메라 5대 연결됨 · 30초 단위로 조각을 만듭니다')
+
+    // 영상이 흐르는 동안 정해진 시각에 저절로 울린다. 버튼은 기다리기 싫은 심사위원용으로 남겨 둔다.
+    ALERT_SCHEDULE.forEach(({ atSeconds, cameraId, risk, phoneEventId }) => {
+      setTimeout(() => void raiseRisk({ cameraId, risk, phoneEventId }), atSeconds * 1000)
+    })
+
+    watchAcks(async (ack) => {
+      const pcEventId = pairedEvents.get(ack.eventId)
+      if (!pcEventId) return
+      const applied = await hook.applyState?.(pcEventId, ack.state)
+      if (applied) log(`휴대폰에서 '${ACK_LABEL[ack.state]}' 처리 — PC 경고도 내려갔습니다`)
+    })
   })
 
-  riskButton.addEventListener('click', async () => {
+  riskButton.addEventListener('click', () => {
     riskButton.disabled = true
-    const event = hook.triggerRisk?.({ risk: 'high' })
-    const camera = event?.cameraName ?? '계산대'
-    log(`이상 행동 감지 · ${camera} · 위험도 높음`, true)
-    $('step-alert').classList.add('done')
-
-    const status = $('alert-status')
-    status.textContent = '휴대폰으로 알림을 보내는 중…'
-    status.className = 'sub'
-
-    const result = await notifyPhone(
-      `강남 1호점 · ${camera}`,
-      '이상 행동이 감지되었습니다 · 위험도 높음',
-      event?.eventId ?? 'ev-1',
-    )
-    status.textContent = NOTIFY_MESSAGE[result]
-    status.className = result === 'sent' ? 'sub ok' : result === 'failed' ? 'sub warn' : 'sub'
-
-    riskButton.disabled = false
-    riskButton.textContent = '한 번 더 보내기'
+    void raiseRisk({ risk: 'high' }).finally(() => {
+      riskButton.disabled = false
+    })
   })
 }
 
