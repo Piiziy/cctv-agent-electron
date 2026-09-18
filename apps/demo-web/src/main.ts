@@ -64,23 +64,6 @@ const code = makeCode()
 /** 휴대폰이 열 주소. 앱은 이 코드로 자기 구독을 등록하고, 우리는 같은 코드로 알림을 쏜다. */
 const phoneUrl = new URL(`m/?code=${code}`, `${location.origin}${import.meta.env.BASE_URL}`).href
 
-const clock = (): string =>
-  new Date().toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-
-const log = (text: string, hit = false): void => {
-  const list = $('log')
-  const li = document.createElement('li')
-  li.className = hit ? 'hit' : ''
-  const time = document.createElement('time')
-  time.textContent = clock()
-  const span = document.createElement('span')
-  span.textContent = text
-  li.append(time, span)
-  list.prepend(li)
-  // 길어지면 패널이 화면을 밀어낸다. 최근 것만 남긴다.
-  while (list.children.length > 8) list.lastElementChild?.remove()
-}
-
 const renderQr = (): void => {
   const qr = qrcode(0, 'M')
   qr.addData(phoneUrl)
@@ -88,6 +71,52 @@ const renderQr = (): void => {
   $('qr').innerHTML = qr.createSvgTag({ margin: 0, scalable: true })
   $('code').textContent = code
 }
+
+const PC_WIDTH = 1280
+const PC_HEIGHT = 860
+
+/** 고정 폭으로 그린 PC 앱을 창에 맞춰 줄인다. 창이 바뀌면 다시 계산한다. */
+const fitPcFrame = (): void => {
+  const frame = $<HTMLIFrameElement>('pc')
+  frame.style.width = `${PC_WIDTH}px`
+  frame.style.height = `${PC_HEIGHT}px`
+
+  const apply = (): void => {
+    const scale = Math.min(globalThis.innerWidth / PC_WIDTH, globalThis.innerHeight / PC_HEIGHT)
+    frame.style.transform = `scale(${scale})`
+  }
+
+  apply()
+  globalThis.addEventListener('resize', apply)
+}
+
+/** 접혀 있는 휴대폰 카드. 필요한 사람만 펼친다. */
+const setupPhoneCard = (): void => {
+  const toggle = $<HTMLButtonElement>('phone-toggle')
+  const body = $('phone-body')
+  toggle.addEventListener('click', () => {
+    body.hidden = !body.hidden
+    toggle.setAttribute('aria-expanded', String(!body.hidden))
+  })
+}
+
+/**
+ * 좁은 화면이면 PC 앱 대신 모바일 앱으로 안내한다.
+ * 이 주소가 대회 사이트에 걸리는 유일한 링크라 심사위원이 폰으로 먼저 열 수 있다.
+ */
+const watchViewport = (): void => {
+  const narrowScreen = globalThis.matchMedia?.('(max-width: 720px)')
+  const handoff = $('handoff')
+  $<HTMLAnchorElement>('open-phone').href = phoneUrl
+
+  const apply = (narrow: boolean): void => {
+    handoff.hidden = !narrow
+  }
+
+  apply(narrowScreen?.matches ?? false)
+  narrowScreen?.addEventListener('change', (event) => apply(event.matches))
+}
+
 
 /** iframe 안의 PC 앱이 준비될 때까지 기다린다. 로드 직후에는 아직 훅이 없다. */
 const waitForPcApp = async (frame: HTMLIFrameElement, timeoutMs = 20_000): Promise<DemoHook | null> => {
@@ -177,26 +206,6 @@ const NOTIFY_MESSAGE: Record<NotifyResult, string> = {
 }
 
 /**
- * 좁은 화면이면 PC 앱 iframe 을 접고 모바일 앱으로 안내한다.
- * 이 주소가 대회 사이트에 걸리는 유일한 링크라 심사위원이 폰으로 먼저 열 수 있다.
- * 가로/세로를 돌리거나 창을 넓히면 따라 바뀌어야 해서 한 번 보고 마는 게 아니라 계속 듣는다.
- */
-const watchViewport = (): void => {
-  const narrowScreen = globalThis.matchMedia?.('(max-width: 720px)')
-  const handoff = $('handoff')
-  const pcSection = $('pc').closest('section')
-  $<HTMLAnchorElement>('open-phone').href = phoneUrl
-
-  const apply = (narrow: boolean): void => {
-    handoff.hidden = !narrow
-    if (pcSection) pcSection.hidden = narrow
-  }
-
-  apply(narrowScreen?.matches ?? false)
-  narrowScreen?.addEventListener('change', (event) => apply(event.matches))
-}
-
-/**
  * 영상 안에서 이상 행동이 일어나는 시각(데모 시작 후 초).
  * 테스트셋 영상이 들어오면 실제 이상행동이 일어나는 초로 이 숫자만 바꾸면 된다.
  * 심사위원이 아무것도 누르지 않아도 보고만 있으면 폰이 울리게 하는 것이 목적이다.
@@ -217,110 +226,49 @@ const ALERT_SCHEDULE: readonly ScheduledAlert[] = [
   { atSeconds: 52, cameraId: 'cam-02', risk: 'medium', phoneEventId: 'ev-2' },
 ]
 
-const PC_WIDTH = 1280
-const PC_HEIGHT = 860
-
-/** 고정 폭으로 그린 PC 앱을 자리 폭에 맞춰 줄인다. 자리가 바뀌면 다시 계산한다. */
-const fitPcFrame = (): void => {
-  const frame = $<HTMLIFrameElement>('pc')
-  const wrap = frame.parentElement
-  if (!wrap) return
-
-  const apply = (): void => {
-    const scale = Math.min(1, wrap.clientWidth / PC_WIDTH)
-    frame.style.transform = `scale(${scale})`
-    wrap.style.height = `${Math.round(PC_HEIGHT * scale)}px`
-  }
-
-  apply()
-  new ResizeObserver(apply).observe(wrap)
-}
+const RISK_LABEL = { high: '높음', medium: '보통' } as const
 
 const main = async (): Promise<void> => {
   renderQr()
+  setupPhoneCard()
   watchViewport()
   fitPcFrame()
 
-  const startButton = $<HTMLButtonElement>('start')
-  const riskButton = $<HTMLButtonElement>('risk')
-
   const hook = await waitForPcApp($<HTMLIFrameElement>('pc'))
-  if (!hook) {
-    log('PC 앱 화면을 불러오지 못했습니다. 새로고침해 주세요.')
-    return
-  }
+  if (!hook) return
 
-  const phoneStatus = $('phone-status')
-  phoneStatus.textContent = PUSH_ENDPOINT
-    ? 'QR 을 찍고 앱에서 알림을 허용하면 준비가 끝납니다.'
-    : '알림 서버 없이 도는 배포입니다 — 휴대폰에서는 페이지를 열어 둔 동안 알림이 보입니다.'
+  const status = $('phone-status')
+  status.textContent = PUSH_ENDPOINT
+    ? 'QR 을 찍고 알림을 허용하면 준비가 끝납니다.'
+    : '알림 서버 없이 도는 배포라, 휴대폰에서는 페이지를 열어 둔 동안 알림이 보입니다.'
 
   waitForPhone(() => {
-    phoneStatus.textContent = '휴대폰이 연결되었습니다. 이제 화면을 꺼도 알림이 갑니다.'
-    phoneStatus.className = 'sub ok'
-    $('step-phone').classList.add('done')
+    status.textContent = '휴대폰이 연결되었습니다. 이제 화면을 꺼도 알림이 갑니다.'
+    status.className = 'sub ok'
+    $('phone-dot').classList.add('ready')
   })
-
-  const RISK_LABEL = { high: '높음', medium: '보통' } as const
 
   /** 휴대폰이 아는 번호 → 이 PC 가 만든 번호. 휴대폰에서 처리한 걸 되돌려 반영할 때 쓴다. */
   const pairedEvents = new Map<string, string>()
 
-  const raiseRisk = async (options: {
-    cameraId?: string
-    risk: 'high' | 'medium'
-    phoneEventId?: string
-  }): Promise<void> => {
-    const event = hook.triggerRisk?.(options)
-    const phoneEventId = options.phoneEventId ?? 'ev-1'
-    if (event) pairedEvents.set(phoneEventId, event.eventId)
-    const camera = event?.cameraName ?? '계산대'
-    const level = RISK_LABEL[options.risk]
-    log(`이상 행동 감지 · ${camera} · 위험도 ${level}`, true)
-    $('step-alert').classList.add('done')
-
-    const status = $('alert-status')
-    status.textContent = '휴대폰으로 알림을 보내는 중…'
-    status.className = 'sub'
-
-    const result = await notifyPhone(
-      `강남 1호점 · ${camera}`,
-      `이상 행동이 감지되었습니다 · 위험도 ${level}`,
-      phoneEventId,
+  const raiseRisk = async (alert: ScheduledAlert): Promise<void> => {
+    const event = hook.triggerRisk?.({ cameraId: alert.cameraId, risk: alert.risk })
+    if (event) pairedEvents.set(alert.phoneEventId, event.eventId)
+    await notifyPhone(
+      `강남 1호점 · ${event?.cameraName ?? '계산대'}`,
+      `이상 행동이 감지되었습니다 · 위험도 ${RISK_LABEL[alert.risk]}`,
+      alert.phoneEventId,
     )
-    status.textContent = NOTIFY_MESSAGE[result]
-    status.className = result === 'sent' ? 'sub ok' : result === 'failed' ? 'sub warn' : 'sub'
-    riskButton.textContent = '한 번 더 보내기'
   }
 
-  startButton.addEventListener('click', () => {
-    startButton.disabled = true
-    startButton.textContent = '감시 중…'
-    $('step-run').classList.add('done')
-    riskButton.disabled = false
-
-    hook.onScenario?.((step) => log(step.detail ? `${step.label} — ${step.detail}` : step.label))
-    hook.startScenario?.()
-    log('카메라 5대 연결됨 · 30초 단위로 조각을 만듭니다')
-
-    // 영상이 흐르는 동안 정해진 시각에 저절로 울린다. 버튼은 기다리기 싫은 심사위원용으로 남겨 둔다.
-    ALERT_SCHEDULE.forEach(({ atSeconds, cameraId, risk, phoneEventId }) => {
-      setTimeout(() => void raiseRisk({ cameraId, risk, phoneEventId }), atSeconds * 1000)
-    })
-
-    watchAcks(async (ack) => {
-      const pcEventId = pairedEvents.get(ack.eventId)
-      if (!pcEventId) return
-      const applied = await hook.applyState?.(pcEventId, ack.state)
-      if (applied) log(`휴대폰에서 '${ACK_LABEL[ack.state]}' 처리 — PC 경고도 내려갔습니다`)
-    })
+  // 들어오자마자 돈다. 심사위원이 누를 것은 없다.
+  ALERT_SCHEDULE.forEach((alert) => {
+    setTimeout(() => void raiseRisk(alert), alert.atSeconds * 1000)
   })
 
-  riskButton.addEventListener('click', () => {
-    riskButton.disabled = true
-    void raiseRisk({ risk: 'high' }).finally(() => {
-      riskButton.disabled = false
-    })
+  watchAcks(async (ack) => {
+    const pcEventId = pairedEvents.get(ack.eventId)
+    if (pcEventId) await hook.applyState?.(pcEventId, ack.state)
   })
 }
 
