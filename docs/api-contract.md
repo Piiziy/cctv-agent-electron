@@ -578,7 +578,7 @@ PUT 본문도 같은 모양이다. `minRisk` 가 셋 중 하나가 아니면 400
 | 2g 설정 | `PATCH /stores/:id`, `GET/PUT .../notification-settings`, `GET /stores/:id/cameras` |
 
 라이브 미리보기(2b ②, 2c 격자)는 **서버를 거치지 않는다** — PC 로컬 RTSP다 (3.4).
-기존 `src/main/services/preview-stream.ts`를 그대로 쓴다.
+기존 `apps/pc/src/main/services/preview-stream.ts`를 그대로 쓴다.
 
 ---
 
@@ -586,8 +586,8 @@ PUT 본문도 같은 모양이다. `minRisk` 가 셋 중 하나가 아니면 400
 
 1. 이 파일을 고친다.
 2. **두 레포 모두**에 같은 내용을 반영한다.
-3. `SegmentMeta`를 바꾸는 경우 `cctv-agent/src/shared/types.ts` ·
-   `scene-stealer-back/ingest-worker/src/segmentMeta.ts` · `cctv-agent/docs/protocol-flow.md`를 함께 맞춘다.
+3. `SegmentMeta`를 바꾸는 경우 `cctv-agent/apps/pc/src/shared/types.ts` ·
+   `scene-stealer-back/ingest-worker/src/segmentMeta.ts` · `cctv-agent/apps/pc/docs/protocol-flow.md`를 함께 맞춘다.
 
 
 ---
