@@ -6,8 +6,8 @@
 이 페이지 하나가 여러 덩어리를 합쳐 놓은 것이다.
 
 ```
-dist/              가짜 서버 데모 셸 (/)
-dist/wanted-test/  실서버 시연 셸 (/wanted-test) — 대회 제출용 비공개 주소
+dist/              가짜 서버 데모 셸 (/index.html — 배포에서는 / 가 /wanted-test 로 넘어간다)
+dist/wanted-test/  실서버 시연 셸 (/wanted-test) — 대회 제출용 주소
 dist/pc/           매장 PC 수집기 화면  ← apps/pc 렌더러를 브라우저용으로 빌드
 dist/m/            사장님 모바일 앱     ← apps/mobile 의 Expo 웹 빌드
 dist/demo-video/   시연 영상 + 30초 조각 ← 레포루트/public/demo-video 원본을 빌드가 자른다
@@ -86,6 +86,7 @@ Root Directory 를 `apps/pc` 같은 하위 폴더로 잡으면 안 된다 — PC
 `vercel.json` 의 rewrite 는 모바일 앱이 SPA 라서 있다. `/m/` 아래 경로는 실제 파일이
 없으면 `index.html` 로 넘겨야 라우터가 받는다 (실제 파일이 있으면 그게 먼저 나간다).
 `/wanted-test` (끝에 `/` 없이) 도 같은 식으로 `wanted-test/index.html` 로 넘긴다.
+루트 `/` 는 redirect 로 `/wanted-test` 에 보낸다 — 가짜 서버 데모는 `/index.html` 로만 남는다.
 
 ### GitHub Pages 로 가야 한다면
 

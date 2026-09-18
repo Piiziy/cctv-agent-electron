@@ -3,6 +3,9 @@
   "buildCommand": "npm run build -w @scene-stealer/demo-web",
   "outputDirectory": "apps/demo-web/dist",
   "framework": null,
+  "redirects": [
+    { "source": "/", "destination": "/wanted-test", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/wanted-test", "destination": "/wanted-test/index.html" },
     { "source": "/m/(.*)", "destination": "/m/index.html" }

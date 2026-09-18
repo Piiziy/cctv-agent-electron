@@ -24,11 +24,14 @@
 Vercel 에 배포한 주소. 이 한 주소 안에 다 있다.
 
 ```
-/wanted-test   실서버 시연 — 데모 계정 · 시연 영상 · 실제 서버 AI 판정 (제출용 비공개 주소)
-/              가짜 서버로 도는 데모 (서버 없이도 끝까지 돈다)
+/wanted-test   실서버 시연 — 데모 계정 · 시연 영상 · 실제 서버 AI 판정 (제출용 주소)
+/              → /wanted-test 로 넘어간다 (2026-09-18, vercel.json redirects)
+/index.html    가짜 서버로 도는 예전 데모 (서버 없이도 끝까지 돈다). 링크는 걸려 있지 않다
 /pc/           매장 PC 수집기 화면
 /m/            사장님 모바일 앱
 ```
+
+루트로 들어와도 실서버 시연(데모 계정 로그인)이 열리므로, `/wanted-test` 는 더 이상 숨은 주소가 아니다.
 
 자세한 구조와 빌드 방법은 [`apps/demo-web/README.md`](../apps/demo-web/README.md),
 실서버 시연이 어떻게 도는지는 [`demo-target-architecture.md`](demo-target-architecture.md).
@@ -134,7 +137,7 @@ npm run fake-camera -w cctv-agent -- --file <받은영상>.mp4
    잠금화면 푸시는 쓰지 않는다 — 휴대폰 화면이 꺼져 있으면 켰을 때 목록에 있다
 5. 휴대폰에서 **확인했어요** → PC 의 경고가 같이 내려간다
 
-## 심사위원 동선 — `/` (가짜 서버)
+## 예전 가짜 서버 데모 동선 — `/index.html`
 
 1. 노트북에서 링크를 연다 → 매장 PC 감시 화면이 그대로 뜬다 (로그인 없음)
 2. QR 을 휴대폰으로 찍는다 → 사장님 앱이 열리고 알림을 허용한다
