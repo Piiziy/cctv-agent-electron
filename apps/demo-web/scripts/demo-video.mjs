@@ -16,7 +16,7 @@
  * 서버 입장에서는 매장 PC 가 올린 조각과 구별되지 않아야 한다.
  *
  *   node scripts/demo-video.mjs            # 한 번 돌려 보기
- *   DEMO_VIDEO_HEIGHT=720 node scripts/demo-video.mjs
+ *   DEMO_VIDEO_HEIGHT=720 DEMO_VIDEO_FPS=15 node scripts/demo-video.mjs
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -45,16 +45,25 @@ const numberFrom = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+/** 원본이 이보다 빠르면 내린다. AI 는 프레임마다 포즈를 뽑으므로 fps 가 곧 서버 분석 시간이다. */
+const MAX_FPS = 30
+
 /**
- * 인코딩 기준값. 기본은 흔한 CCTV 보조 스트림(세로 480 · 15fps)이다.
- * AI 는 프레임마다 포즈를 뽑으므로 fps 가 곧 분석 시간이다 — 30fps 원본을 그대로 올리면
- * CPU 분석이 조각 길이보다 오래 걸려 대기열이 밀린다.
+ * 인코딩 기준값. 세로 480, fps 는 원본 그대로(최대 MAX_FPS).
+ * fps 를 15 로 낮추지 않는 이유: 서버 AI 는 한 사람을 연속 32프레임씩 묶어 본다. 15fps 면 그 묶음이
+ * 2초가 넘어 짧게 튀는 동작이 묻히고, 추적이 한 번만 끊겨도 묶음이 안 생긴다 — 25fps 원본에서
+ * 매번 '높음'이던 장면이 15fps 로는 '보통'에 그치거나 아예 안 잡혔다.
  */
 export const encodingFromEnv = (env = process.env) => ({
   segmentSeconds: numberFrom(env.DEMO_SEGMENT_SECONDS, 30),
   height: numberFrom(env.DEMO_VIDEO_HEIGHT, 480),
-  fps: numberFrom(env.DEMO_VIDEO_FPS, 15),
+  /** 0 = 원본 fps. */
+  fps: numberFrom(env.DEMO_VIDEO_FPS, 0),
 })
+
+/** 실제로 쓸 fps — 정해 둔 값이 없으면 원본을 따르되 MAX_FPS 를 넘기지 않는다. */
+export const outputFps = (encoding, sourceFps) =>
+  encoding.fps || Math.min(sourceFps > 0 ? sourceFps : MAX_FPS, MAX_FPS)
 
 const ffmpegPath = () => {
   const path = require('ffmpeg-static')
@@ -207,8 +216,9 @@ export const buildDemoVideos = ({
     if (cached) {
       log(`  ${fileName} → ${id} (이전 결과 재사용)`)
     } else {
-      log(`  ${fileName} → ${id} 인코딩 (${encoding.height}p · ${encoding.fps}fps · ${encoding.segmentSeconds}초 조각)`)
-      encodeOne(sourceFile, outDir, encoding)
+      const fps = outputFps(encoding, probe(sourceFile).fps)
+      log(`  ${fileName} → ${id} 인코딩 (${encoding.height}p · ${fps}fps · ${encoding.segmentSeconds}초 조각)`)
+      encodeOne(sourceFile, outDir, { ...encoding, fps })
       writeFileSync(keyFile, key)
     }
     const described = describeOne(fileName, outDir, id)

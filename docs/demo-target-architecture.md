@@ -42,7 +42,7 @@ RTSP 가 필요 없다. 에이전트가 할 "자르기"를 빌드 때 미리 해
 
 | 조각 | 어디 | 하는 일 |
 |---|---|---|
-| 영상 자르기 | `apps/demo-web/scripts/demo-video.mjs` | `public/demo-video/*.mp4` → 480p · 15fps · 30초 H.264 조각 + 목록(manifest). 빌드 때 돈다 |
+| 영상 자르기 | `apps/demo-web/scripts/demo-video.mjs` | `public/demo-video/*.mp4` → 480p · 원본 fps(최대 30) · 30초 H.264 조각 + 목록(manifest). 빌드 때 돈다 |
 | 셸 | `apps/demo-web/wanted-test/` · `src/live.ts` | PC 앱을 창 가득(iframe `/pc/?live=1`, 창이 앱 최소 크기 1180×720 보다 작으면 통째로 줄인다). 휴대폰이면 `/m/?live=1` 로 넘긴다. 직접 그리는 것은 시작하지 못한 이유뿐 |
 | PC 화면 | `apps/pc/src/renderer/lib/live/` | `live-api.ts` — 데모 계정 로그인 · 매장 찾기 · 카메라 등록 · 하트비트 · 실시간 채널. `collector.ts` — 조각 업로드 |
 | 모바일 | `apps/mobile/src/lib/config.ts` 외 | `?live=1` 감지(브라우저에 기억), 데모 계정 자동 로그인, 페이지가 열려 있는 동안 10초마다 새로 읽고 새 경고는 휴대폰 알림으로 |
@@ -58,7 +58,9 @@ PC 앱 CSP 는 웹 데모 빌드에서만 `LIVE_API_URL` · `LIVE_SUPABASE_URL` 
 |---|---|
 | ✅ 로컬 가짜 백엔드로 전체 흐름 | 로그인 → 카메라 등록 → 매장 조각 길이 30초로 맞춤 → 30초마다 조각 업로드(meta 가 계약 그대로) → 위험 이벤트 → PC 경고 → 폰에서 '확인했어요' → PC 경고가 닫힘 |
 | ✅ 단위 테스트 | 수집기(업로드 시점·meta·재시도·인증 실패·다시 시작), 데모 계정 로그인 |
-| ❌ 실제 백엔드·Supabase·AI 워커 | 배포 전이라 못 했다 |
+| ✅ 실제 백엔드 — 업로드까지 (2026-09-19) | `app.scene-stealer.site/wanted-test` → 데모 계정 로그인 · 매장 · 카메라 등록 · CORS · 기기 토큰 조각 업로드 · AI 워커 인계 |
+| ❌ 실제 AI 워커 | 모든 영상이 진행률 5% 에서 `failed`. 원인을 찾아 고쳤다 — 배포 대기 (아래 '남은 일' 8) |
+| ✅ AI 판정 (로컬) | 서버와 같은 파이프라인 · 같은 조각으로 시연 영상이 매번 '높음'(1.86~1.93배) — [`public/demo-video/README.md`](../public/demo-video/README.md) |
 | — 잠금화면 푸시 | **쓰지 않기로 했다** (2026-09-18). 폰은 페이지를 열어 둔 동안 새 경고를 목록과 휴대폰 알림으로 받는다 |
 | ❌ 아이폰 | 알림은 홈 화면에 추가한 앱에서만 뜬다. 웹앱 정보(manifest)는 넣었지만 실기기로 확인 못 했다 |
 
@@ -66,10 +68,8 @@ PC 앱 CSP 는 웹 데모 빌드에서만 `LIVE_API_URL` · `LIVE_SUPABASE_URL` 
 
 PR: https://github.com/SceneStealer1/scene-stealer-back/pull/1
 
-1. **설계 합의 후 머지 → `api.scene-stealer.site` 를 PR 버전으로 다시 배포.** 우리 PR 뒤에 팀원이 main 에
-   따로 도메인 API 를 넣었다(9/16). `stores`·`devices`·`cameras` 가 겹치는데 모양이 다르다. 프론트는 PR 쪽
-   계약(`docs/api-contract.md`)에 맞춰져 있다. 2026-09-18 에 확인한 `api.scene-stealer.site` 는 **팀원 main
-   버전**이다 — `/stores` 가 503(Supabase·JWT 설정 없음)이고, 이벤트·실시간 채널·기기 등록·하트비트 경로가 없다.
+1. **PR 머지 → `api.scene-stealer.site` 다시 배포 — ✅ 됨** (2026-09-18, `d12f9b6`). 팀원 main 과 겹치던
+   `stores`·`devices`·`cameras` 는 PR 쪽 계약(`docs/api-contract.md`)으로 합쳤다.
 2. **도메인 + HTTPS — ✅ 됨.** 웹 `https://app.scene-stealer.site`(Vercel), API `https://api.scene-stealer.site`.
    둘 다 코드에 기본값으로 들어 있다 (`build-all.mjs` 의 `LIVE_API_URL`, 백엔드 `CORS_ALLOWED_DOMAIN`).
 3. **CORS — ✅ PR 에 넣었다** (`80e842a`, `5c9fd4e`). `scene-stealer.site` 와 그 하위 도메인의 https 페이지만
@@ -80,19 +80,29 @@ PR: https://github.com/SceneStealer1/scene-stealer-back/pull/1
 6. **데모 데이터.** 계정(이메일·비밀번호), 매장(영업시간 비움 — 채우면 낮에는 '높음'만 푸시), 기기 토큰.
    카메라는 브라우저가 알아서 등록한다.
 7. **`INTERNAL_API_TOKEN`** 을 ingest·backend 양쪽에 — 없으면 카메라 상태가 실시간으로 안 간다.
-8. **AI 워커 가동 + 시연 영상으로 확인** (아래).
+8. **AI 워커 수정 배포** — 브랜치 `Piiziy/scene-stealer-back:fix/ai-worker-torchvision-cpu` 를 PR 로 올려
+   머지하고 서버에서 `./build-deploy.sh`.
+   - `ed86f11` torchvision 을 CPU 빌드로. PyPI 판(CUDA 빌드)이 CPU torch 와 섞여, 첫 프레임에서
+     `operator torchvision::nms does not exist` 로 **모든 영상이 5% 에서 실패**했다. WSL 에서 서버와 같은
+     설치 순서로 재현하고, 고친 Dockerfile 순서로 끝까지 도는 것까지 확인했다. 포즈 모델 가중치도 이미지에 넣는다.
+   - `8935166` 가려진 keypoint 를 좌표로 쓰지 않게. ultralytics 가 가려진 점을 (0,0) 으로 채우는데 그대로
+     정규화에 들어가 잡음이 되던 문제 — 이게 고쳐져야 시연 영상이 '높음'이 된다.
+9. **배포 후 확인** — `/wanted-test` 를 한 번 열어 두고 Supabase `videos` 의 `status` 가 `done`,
+   `anomaly_events` · `events` 에 행이 생기는지 본다. 영상이 끝나고 분석이 끝나면 PC 에 경고가 떠야 한다.
 
 ## 따져 볼 것
 
-**AI 가 시연 영상을 잡는가.** AI 는 조각마다 작은 모델을 새로 학습해 **그 조각 안에서** 튀는 동작을 표시한다
-(평균 + 2.5 표준편차). 그래서
+**AI 가 시연 영상을 잡는가 — 잡는 영상으로 골랐다.** AI 는 조각마다 작은 모델을 새로 학습해 **그 조각 안에서**
+튀는 동작을 표시한다 (평균 + 2.5 표준편차). 영상 후보 11개로 돌려 본 결과 (2026-09-19)
 
-- 평범한 조각에서도 '제일 튀는 순간'이 잡힐 수 있고, 이상 행동이 조각 대부분을 차지하면 놓칠 수 있다
-- PC 경고창은 '높음'(점수가 기준의 1.5배 이상)에만 뜬다
-- 학습에 난수 시드가 없어 같은 영상도 결과가 다를 수 있다
-- 프레임마다 포즈를 뽑는다. 30초 조각 분석이 30초를 넘으면 대기열이 밀린다 (워커 하나, 동시 처리 불가)
+- '높음'(기준의 1.5배)은 드물다. 튀는 묶음이 몇 개만 있어도 평균·표준편차가 같이 올라, 대부분 1.0~1.4배에 머문다.
+  사람이 넘어지는 영상(CAUCAFall)도 '높음'은 안 나왔다. PC 경고창은 '높음'에만 뜬다
+- fps 를 15 로 낮추면 더 안 잡힌다 → 시연 영상은 원본 fps 로 올린다
+- 학습 시드가 없어 결과가 흔들렸는데, 가려진 keypoint 수정 뒤로는 같은 영상이면 거의 같게 나온다
+- 프레임마다 포즈를 뽑는다. 26초 · 25fps 조각이 데스크톱 CPU 로 약 30초 — 서버는 이보다 느릴 수 있다
+  (워커 하나, 동시 처리 불가)
 
-→ 영상을 받으면 서버에서 30초 조각으로 몇 번 돌려 **잡히는지 · 위험도 · 걸리는 시간**부터 본다.
+→ 영상을 바꿀 때는 [`public/demo-video/README.md`](../public/demo-video/README.md) 의 방법으로 먼저 돌려 본다.
 
 **여러 심사위원이 동시에 들어오면** 같은 계정·매장을 쓰므로 서로의 경고와 푸시가 섞인다.
 들어올 때마다 새 계정을 만드는 방식은 백엔드 작업이 더 든다.

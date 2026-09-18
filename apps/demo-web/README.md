@@ -66,7 +66,7 @@ npm run build -w @scene-stealer/demo-web
 | `LIVE_SUPABASE_URL` · `LIVE_SUPABASE_ANON_KEY` · `LIVE_EMAIL` · `LIVE_PASSWORD` · `LIVE_DEVICE_TOKEN` | `/wanted-test` 가 빠진 이름을 화면에 띄운다. `/` 는 영향 없음 |
 | `LIVE_API_URL` | `https://api.scene-stealer.site` |
 | `LIVE_STORE_ID` | 데모 계정의 첫 매장 |
-| `DEMO_VIDEO_HEIGHT` · `DEMO_VIDEO_FPS` · `DEMO_SEGMENT_SECONDS` | 480 · 15 · 30 |
+| `DEMO_VIDEO_HEIGHT` · `DEMO_VIDEO_FPS` · `DEMO_SEGMENT_SECONDS` | 480 · 원본 그대로(최대 30) · 30 |
 
 `LIVE_*` 는 번들에 박혀 공개된다. 데모 전용 계정·매장·기기 토큰만 넣는다.
 

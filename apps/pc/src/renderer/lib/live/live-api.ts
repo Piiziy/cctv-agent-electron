@@ -172,6 +172,19 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
     }
     state.manifest = manifest
 
+    // 시연 영상을 바꾸면 예전 영상의 카메라가 서버에 남아 '중지'로 보이고, 쌓이면 매장당 8대 제한에
+    // 걸려 등록이 막힌다. 목록에서 빠진 시연 카메라(demo-…)는 먼저 지운다 (soft delete, 다시 넣으면 되살아난다).
+    const listed = await request({ method: 'GET', path: `/stores/${encodeURIComponent(store.id)}/cameras` })
+    if (listed.ok) {
+      const current = new Set(manifest.videos.map((video) => video.id))
+      const cameras = (listed.data as { cameras?: { id: string; agentCameraId: string }[] } | null)?.cameras ?? []
+      await Promise.all(
+        cameras
+          .filter((camera) => camera.agentCameraId.startsWith('demo-') && !current.has(camera.agentCameraId))
+          .map((camera) => request({ method: 'DELETE', path: `/cameras/${encodeURIComponent(camera.id)}` })),
+      )
+    }
+
     // 서버가 조각을 이 카메라에 달 수 있게 등록해 둔다. 같은 id 로 다시 등록하면 기존 것을 돌려준다.
     const registered = await Promise.all(
       manifest.videos.map((video, index) =>
