@@ -228,7 +228,8 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Caption>계정</Caption>
           <Card>
-            <ListRow label="전화번호" value={session?.phone ?? '-'} />
+            {/* 실서버 시연의 데모 계정은 번호가 없으면 이메일이 들어 있다 (lib/auth.ts). */}
+            <ListRow label={session?.phone.includes('@') ? '이메일' : '전화번호'} value={session?.phone ?? '-'} />
             <Divider />
             <ListRow label="로그아웃" danger onPress={() => void signOut()} />
           </Card>

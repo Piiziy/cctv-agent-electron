@@ -6,8 +6,8 @@ import { createServerStream } from '../../../main/services/server-stream'
 import type { AgentApi, ServerRequest, ServerResult, SessionSummary, StreamConnectionState } from '../../../shared/ipc'
 import type { ServerStreamMessage, StoreDto } from '../../../shared/server-types'
 import { DEFAULT_CONFIG, type AgentConfig, type AgentStatus } from '../../../shared/types'
-import { createCollector, segmentKey, type Collector, type LiveProgress, type SegmentAnalysis } from './collector'
-import { LIVE_ACCOUNT_LABEL, liveConfig, missingLiveConfig, type LiveConfig } from './config'
+import { createCollector, type Collector } from './collector'
+import { liveConfig, missingLiveConfig, type LiveConfig } from './config'
 import { loadManifest, type DemoManifest } from './manifest'
 
 /**
@@ -23,13 +23,10 @@ export type LiveBootResult =
   | { readonly ok: true; readonly storeName: string; readonly cameraCount: number }
   | { readonly ok: false; readonly message: string }
 
-/** 바깥 데모 셸(/wanted-test)이 iframe 너머로 부르는 손잡이. */
+/** 바깥 데모 셸(/wanted-test)이 iframe 너머로 보는 손잡이. 시작하지 못했을 때 이유를 띄우는 데만 쓴다. */
 export interface LiveDemoControl {
   readonly configMissing: readonly string[]
   readonly ready: Promise<LiveBootResult>
-  restart(): void
-  progress(): LiveProgress | null
-  onProgress(listener: (progress: LiveProgress) => void): () => void
 }
 
 declare global {
@@ -38,9 +35,9 @@ declare global {
   }
 }
 
-const NOT_IN_DEMO = '웹 체험판에서는 시연 영상이 카메라를 대신합니다. 실제 카메라 연결은 매장 PC 앱에서 합니다.'
 const SESSION_KEY = 'scene-stealer:live:session'
-const ANALYSIS_POLL_MS = 4000
+/** 매장 PC 앱의 카메라 검색 시간 (main/ipc.ts). */
+const DISCOVER_MS = 5000
 
 /** 탭을 닫으면 사라지는 세션 저장소. 새로고침해도 다시 로그인하지 않게만 한다. */
 const tabTokenStore = (): TokenStore => ({
@@ -77,17 +74,6 @@ const idleStatus: AgentStatus = {
   lastError: null,
 }
 
-interface VideoListItem {
-  readonly storeId?: string
-  readonly cameraLocation?: string | null
-  readonly status?: string
-  readonly progress?: number
-  readonly recordedStartedAt?: string
-  readonly anomalyCount?: number
-}
-
-const ANALYSIS_STATUSES = new Set(['uploaded', 'processing', 'done', 'failed'])
-
 export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
   // 브라우저의 fetch 는 window 에 묶여 있어야 한다. 그냥 넘기면 'Illegal invocation'.
   const browserFetch: typeof fetch = (input, init) => globalThis.fetch(input, init)
@@ -110,7 +96,6 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
   })
 
   const statusListeners = new Set<(status: AgentStatus) => void>()
-  const progressListeners = new Set<(progress: LiveProgress) => void>()
 
   const state = {
     config: {
@@ -123,8 +108,6 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
     } as AgentConfig,
     collector: null as Collector | null,
     manifest: null as DemoManifest | null,
-    store: null as StoreDto | null,
-    analysisTimer: null as ReturnType<typeof setTimeout> | null,
   }
 
   const summary = (): SessionSummary => {
@@ -133,66 +116,6 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
   }
 
   const request = (req: ServerRequest): Promise<ServerResult> => client.request(req)
-
-  /**
-   * 서버 분석 진행률. /videos 가 이 계정의 최근 조각과 분석 상태를 준다.
-   * 조각 id 는 응답에 없어서 (카메라 이름, 시작 시각)으로 맞춘다 — 시작 시각은 우리가 보낸 값 그대로다.
-   */
-  const pollAnalysis = async (): Promise<void> => {
-    state.analysisTimer = null
-    const collector = state.collector
-    const store = state.store
-    if (!collector || !store) return
-
-    const waiting = collector
-      .progress()
-      .segments.filter(
-        (segment) =>
-          segment.phase === 'uploaded' &&
-          segment.analysis?.status !== 'done' &&
-          segment.analysis?.status !== 'failed',
-      )
-    if (waiting.length > 0) {
-      const result = await request({ method: 'GET', path: '/videos?limit=50' })
-      const videos = result.ok ? ((result.data as { videos?: VideoListItem[] } | null)?.videos ?? []) : []
-      const found = new Map<string, SegmentAnalysis>()
-      waiting.forEach((segment) => {
-        const startedAt = Date.parse(segment.startedAt)
-        const match = videos.find(
-          (video) =>
-            video.storeId === store.id &&
-            video.cameraLocation === segment.cameraName &&
-            Date.parse(video.recordedStartedAt ?? '') === startedAt,
-        )
-        if (match && typeof match.status === 'string' && ANALYSIS_STATUSES.has(match.status)) {
-          found.set(segmentKey(segment.cameraId, segment.index), {
-            status: match.status as SegmentAnalysis['status'],
-            progress: typeof match.progress === 'number' ? match.progress : 0,
-            anomalyCount: typeof match.anomalyCount === 'number' ? match.anomalyCount : 0,
-          })
-        }
-      })
-      collector.mergeAnalysis(found)
-    }
-
-    const stillWaiting = collector
-      .progress()
-      .segments.some(
-        (segment) =>
-          segment.phase === 'pending' ||
-          segment.phase === 'uploading' ||
-          segment.phase === 'retrying' ||
-          (segment.phase === 'uploaded' &&
-            segment.analysis?.status !== 'done' &&
-            segment.analysis?.status !== 'failed'),
-      )
-    if (stillWaiting) state.analysisTimer = setTimeout(() => void pollAnalysis(), ANALYSIS_POLL_MS)
-  }
-
-  const watchAnalysis = (): void => {
-    if (state.analysisTimer) clearTimeout(state.analysisTimer)
-    state.analysisTimer = setTimeout(() => void pollAnalysis(), ANALYSIS_POLL_MS)
-  }
 
   const fail = (message: string): LiveBootResult => ({ ok: false, message })
 
@@ -206,7 +129,7 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
     const existing = session.summary() ? await session.accessToken() : null
     if (!existing) {
       try {
-        await session.signInWithPassword(config.email, config.password, LIVE_ACCOUNT_LABEL)
+        await session.signInWithPassword(config.email, config.password)
       } catch (error) {
         return fail(
           error instanceof SessionError
@@ -236,7 +159,6 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
           : '데모 계정에 매장이 없습니다. 매장을 먼저 만들어 주세요.',
       )
     }
-    state.store = store
 
     // 3) 시연 영상 = 카메라.
     let manifest: DemoManifest
@@ -292,15 +214,13 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
       cameras: collector.cameras,
     }
     collector.onStatus((status) => statusListeners.forEach((listener) => listener(status)))
-    collector.onProgress((progress) => progressListeners.forEach((listener) => listener(progress)))
 
     // 들어오자마자 돈다. 심사위원이 누를 것은 없다.
     collector.start()
-    watchAnalysis()
 
     // 하트비트는 탭이 열려 있는 동안 계속 간다 — 모바일의 'PC 켜짐'이 여기서 나온다.
-    // 수집기를 먼저 켜야 첫 하트비트부터 카메라가 connected 로 간다.
-    // 영상이 끝난 카메라는 에이전트의 '일시 중지'처럼 unknown 으로 보고된다.
+    // 수집기를 먼저 켜야 첫 하트비트부터 카메라가 connected 로 간다. 영상이 끝나도 connected 이고,
+    // '일시 중지'를 누르면 에이전트처럼 unknown 으로 보고된다.
     createHeartbeat({
       getConfig: () => state.config,
       getStatus: () => collector.status(),
@@ -314,27 +234,22 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
     (error: unknown): LiveBootResult => fail(error instanceof Error ? error.message : '실서버 데모를 시작하지 못했습니다'),
   )
 
-  window.__sceneStealerLive = {
-    configMissing: missingLiveConfig(config),
-    ready,
-    restart: () => {
-      state.collector?.start()
-      watchAnalysis()
-    },
-    progress: () => state.collector?.progress() ?? null,
-    onProgress: (listener) => {
-      progressListeners.add(listener)
-      return () => {
-        progressListeners.delete(listener)
-      }
-    },
-  }
+  window.__sceneStealerLive = { configMissing: missingLiveConfig(config), ready }
 
   return {
-    discover: async () => ({ ok: false, message: NOT_IN_DEMO }),
-    probe: async () => ({ ok: false, kind: 'unknown', message: NOT_IN_DEMO }),
-    probeRtsp: async () => ({ ok: false, kind: 'unknown', message: NOT_IN_DEMO }),
-    snapshot: async () => ({ ok: false, message: NOT_IN_DEMO }),
+    // 브라우저는 매장 네트워크의 카메라에 닿을 수 없다. 카메라가 없는 네트워크에 놓인 매장 PC 앱과
+    // 똑같이 보이게 한다 — 검색은 찾은 것 없이 끝나고, 주소를 넣으면 연결하지 못한다 (문구는 main/ipc.ts).
+    discover: async (timeoutMs) => {
+      await new Promise((resolve) => setTimeout(resolve, timeoutMs ?? DISCOVER_MS))
+      return { ok: true, cameras: [] }
+    },
+    probe: async () => ({ ok: false, kind: 'unreachable', message: '카메라에 연결하지 못했습니다: 응답이 없습니다' }),
+    probeRtsp: async () => ({
+      ok: false,
+      kind: 'unreachable',
+      message: '이 주소에서 영상을 읽지 못했습니다. 주소·아이디·비밀번호를 확인해 주세요.',
+    }),
+    snapshot: async () => ({ ok: false, message: '미리보기를 가져오지 못했습니다' }),
 
     previewStart: async (rtspUri) => {
       await ready
@@ -343,7 +258,8 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
       const video = camera ? state.manifest?.videos.find((candidate) => candidate.id === camera.id) : undefined
       if (!collector || !camera || !video) return { ok: false, message: '시연 영상을 찾지 못했습니다' }
       // 수집기가 올리고 있는 지점부터 튼다 — 화면에 보이는 장면이 곧 서버로 가는 조각이다.
-      const seconds = collector.playheadMs(camera.id) / 1000
+      // 영상이 끝났으면 끝 직전에서 틀어 마지막 장면에 멈추게 한다 (끝에서 열면 브라우저가 처음부터 틀 수 있다).
+      const seconds = Math.min(collector.playheadMs(camera.id), Math.max(0, video.durationMs - 100)) / 1000
       return { ok: true, url: `${video.url}#t=${seconds.toFixed(2)}` }
     },
     previewStop: async () => undefined,
@@ -351,7 +267,6 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
     start: async () => {
       await ready
       state.collector?.start()
-      watchAnalysis()
     },
     stop: async () => {
       await ready
@@ -381,7 +296,7 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
     authSendOtp: async () => ({ ok: false, message: '체험판은 데모 계정으로 자동 로그인됩니다.' }),
     authVerifyOtp: async () => ({ ok: false, message: '체험판은 데모 계정으로 자동 로그인됩니다.' }),
     authSignOut: async () => {
-      // 체험판에는 다른 계정이 없다. 로그아웃은 '처음부터 다시'로 쓴다.
+      // 이 주소로 들어온 것 자체가 데모 계정 로그인이다. 로그아웃하면 새로 열려 처음부터 다시 돈다.
       stream.stop()
       await session.signOut()
       window.location.reload()

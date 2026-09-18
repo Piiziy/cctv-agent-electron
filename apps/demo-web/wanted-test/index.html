@@ -5,51 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- 대회 제출용 비공개 주소. 검색에 걸리지 않게 한다. -->
     <meta name="robots" content="noindex, nofollow" />
-    <title>씬스틸러 — 실서버 시연</title>
-    <meta name="description" content="테스트 영상을 CCTV 대신 물려 실제 서버의 AI 가 판정합니다." />
+    <!-- 제목은 안의 앱을 따라간다 (live.ts). -->
+    <title>Scene Stealer</title>
     <link rel="stylesheet" href="../src/styles.css" />
   </head>
-  <body>
-    <!-- 매장 PC 수집기. 데모 계정으로 로그인해 시연 영상을 카메라 삼아 실제 서버로 조각을 올린다. -->
-    <div class="stage" id="stage">
-      <iframe id="pc" title="매장 PC 수집기"></iframe>
-    </div>
+  <body class="app-window">
+    <!--
+      매장 PC 앱을 창 가득 띄운다. 설명·진행 표시를 덧붙이지 않는다 — 실제 앱 화면 그대로다.
+      앱이 데모 계정으로 로그인해 시연 영상을 카메라 삼아 실제 서버로 조각을 올린다.
+      휴대폰으로 열면 사장님 앱으로 바로 넘어간다.
+    -->
+    <iframe id="pc" title="Scene Stealer"></iframe>
 
-    <!-- 지금 어디까지 왔나 — 조각 업로드와 서버 AI 분석. 경고가 뜨기 전 1~2분의 공백을 설명한다. -->
-    <section class="live-panel" id="live" hidden>
-      <button class="live-toggle" id="live-toggle" aria-expanded="true" aria-controls="live-body">
-        <span class="dot" id="live-dot"></span>
-        <span class="live-title">실서버 시연 <span class="live-store" id="live-store"></span></span>
-        <span class="live-clock" id="live-clock"></span>
-      </button>
-      <div class="live-body" id="live-body">
-        <p class="live-state" id="live-state"></p>
-        <ol class="segments" id="segments"></ol>
-        <p class="sub">
-          영상 속 이상 행동이 조각으로 올라가 서버 AI 판정을 거쳐 경고가 되기까지 1~2분 걸립니다.
-          경고와 휴대폰 알림은 AI 가 위험으로 판정했을 때만 옵니다.
-        </p>
-        <button class="btn small" id="restart" type="button">처음부터 다시</button>
-      </div>
-    </section>
-
-    <!-- 휴대폰으로 알림을 받아 보려는 사람만 펼친다. -->
-    <aside class="phone" id="phone">
-      <button class="phone-toggle" id="phone-toggle" aria-expanded="false" aria-controls="phone-body">
-        <span class="dot" id="phone-dot"></span>
-        휴대폰으로 알림 받기
-      </button>
-      <div class="phone-body" id="phone-body" hidden>
-        <p>
-          휴대폰 카메라로 찍으면 사장님 앱이 같은 데모 계정으로 열립니다. 페이지를 열어 둔 채로 두면 서버 AI 가
-          위험을 판정할 때 휴대폰에도 바로 뜨고, <b>알림 받기</b>를 눌러 두면 휴대폰 알림으로도 옵니다.
-        </p>
-        <div class="qr" id="qr" aria-label="휴대폰으로 앱을 여는 QR 코드"></div>
-        <p class="sub">아이폰에서 알림까지 받으려면 사파리 공유 버튼 → '홈 화면에 추가' 한 앱에서 열어 주세요.</p>
-      </div>
-    </aside>
-
-    <!-- 시작하지 못한 이유. 로그인 화면 같은 엉뚱한 화면을 보이는 대신 이유를 그대로 적는다. -->
+    <!-- 시작하지 못했을 때만 뜬다. 로그인 화면 같은 엉뚱한 화면을 보이는 대신 이유를 그대로 적는다. -->
     <section class="notice" id="notice" hidden>
       <div class="notice-card">
         <h1>실서버 시연을 시작하지 못했습니다</h1>
@@ -60,17 +28,6 @@
           자세한 절차는 저장소의 docs/demo-submission.md 에 있습니다.
         </p>
       </div>
-    </section>
-
-    <!-- 휴대폰으로 이 주소를 연 사람에게는 데스크톱 화면 대신 앱을 바로 권한다. -->
-    <section class="handoff" id="handoff" hidden>
-      <h1>씬스틸러</h1>
-      <p>
-        이 주소는 <b>매장 PC 에 설치하는 수집기</b> 화면이라 넓은 화면이 필요합니다.
-        휴대폰에서는 <b>사장님 앱</b>을 바로 열어 보세요.
-      </p>
-      <a class="btn primary" id="open-phone" href="#">사장님 앱 열기</a>
-      <p class="sub">전체 흐름(시연 영상 → 서버 AI 판정 → 경고·알림)은 노트북에서 이 주소를 열면 보실 수 있습니다.</p>
     </section>
 
     <script type="module" src="../src/live.ts"></script>

@@ -20,8 +20,10 @@ import type { DemoManifest, DemoSegment, DemoVideo } from './manifest'
  *  - 요청 모양은 POST /v1/segments 그대로 (multipart: meta + video, 기기 토큰)
  *  - 응답 해석·재시도는 에이전트와 같은 정책 (shared/upload-policy.ts)
  *
- * 영상을 한 번 끝까지 틀면 멈춘다. 반복하면 같은 사건으로 알림이 계속 가고, 탭을 열어 둔
- * 동안 서버 분석이 끝없이 쌓인다. 다시 보려면 처음부터 다시 시작한다.
+ * 영상은 한 번만 올린다. 반복하면 같은 사건으로 알림이 계속 가고, 탭을 열어 둔 동안 서버 분석이
+ * 끝없이 쌓인다. 그래도 영상이 끝났다고 카메라를 끄지 않는다 — 실제 매장처럼 계속 '감시 중'이고,
+ * 화면은 마지막 장면(사건이 지나간 뒤의 매장)에 머문다. 멈추는 것은 에이전트처럼 '일시 중지'뿐이다.
+ * 다시 보려면 '일시 중지' → '감시 다시 시작'을 누르거나 페이지를 새로 연다.
  */
 
 export const LIVE_AGENT_VERSION = `${AGENT_VERSION}-web-demo`
@@ -32,14 +34,6 @@ const FINALIZE_MS = 500
 const MAX_ATTEMPTS = 8
 
 export type SegmentPhase = 'pending' | 'uploading' | 'retrying' | 'uploaded' | 'failed'
-
-export type AnalysisStatus = 'uploaded' | 'processing' | 'done' | 'failed'
-
-export interface SegmentAnalysis {
-  readonly status: AnalysisStatus
-  readonly progress: number
-  readonly anomalyCount: number
-}
 
 export interface SegmentProgress {
   readonly key: string
@@ -54,8 +48,6 @@ export interface SegmentProgress {
   readonly segmentId: string | null
   readonly phase: SegmentPhase
   readonly error: string | null
-  /** 서버 분석 상태. 올리기 전이거나 아직 서버 목록에 안 보이면 null. */
-  readonly analysis: SegmentAnalysis | null
 }
 
 export type LivePhase = 'idle' | 'running' | 'finished' | 'stopped' | 'error'
@@ -92,10 +84,7 @@ export interface Collector {
   progress(): LiveProgress
   /** 화면 타일이 틀어야 할 지점(ms). 시작 전이면 0, 끝났으면 영상 끝. */
   playheadMs(cameraId: string): number
-  /** 서버 분석 상태를 합친다. key 는 SegmentProgress.key. */
-  mergeAnalysis(entries: ReadonlyMap<string, SegmentAnalysis>): void
   onStatus(listener: (status: AgentStatus) => void): () => void
-  onProgress(listener: (progress: LiveProgress) => void): () => void
 }
 
 /** 화면과 서버가 아는 카메라 모양. id 가 곧 서버의 agentCameraId 다. */
@@ -184,7 +173,6 @@ export const createCollector = (deps: CollectorDeps): Collector => {
   const longestMs = videos.reduce((max, video) => Math.max(max, video.durationMs), 0)
 
   const statusListeners = new Set<(status: AgentStatus) => void>()
-  const progressListeners = new Set<(progress: LiveProgress) => void>()
 
   const state = {
     pass: null as Pass | null,
@@ -207,10 +195,10 @@ export const createCollector = (deps: CollectorDeps): Collector => {
     return counter
   }
 
-  const cameraStreaming = (video: DemoVideo): boolean => {
+  /** 멈추기(일시 중지 · 인증 실패) 전까지는 카메라가 켜져 있다. 영상이 끝나도 그렇다. */
+  const cameraStreaming = (): boolean => {
     const pass = state.pass
-    if (!pass || pass.cancelled) return false
-    return now() < pass.startedAt + video.durationMs
+    return pass !== null && !pass.cancelled
   }
 
   const segmentsOf = (cameraId: string): SegmentProgress[] =>
@@ -222,12 +210,13 @@ export const createCollector = (deps: CollectorDeps): Collector => {
     const upload: UploadStatus =
       state.fatal ?? (all.some((segment) => segment.phase === 'retrying') ? 'retrying' : inFlight.length > 0 ? 'uploading' : 'idle')
 
+    const streaming = cameraStreaming()
     const cameraStatuses: CameraRuntimeStatus[] = videos.map((video) => {
       const counter = counterOf(video.id)
       return {
         cameraId: video.id,
         name: video.name,
-        camera: cameraStreaming(video) ? 'streaming' : 'idle',
+        camera: streaming ? 'streaming' : 'idle',
         uploadedCount: counter.uploadedCount,
         pendingCount: segmentsOf(video.id).filter((s) => s.phase === 'uploading' || s.phase === 'retrying').length,
         lastUploadAt: counter.lastUploadAt,
@@ -258,10 +247,8 @@ export const createCollector = (deps: CollectorDeps): Collector => {
   })
 
   const emit = (): void => {
-    const nextStatus = status()
-    const nextProgress = progress()
-    statusListeners.forEach((listener) => listener(nextStatus))
-    progressListeners.forEach((listener) => listener(nextProgress))
+    const next = status()
+    statusListeners.forEach((listener) => listener(next))
   }
 
   const patchSegment = (key: string, patch: Partial<SegmentProgress>): void => {
@@ -437,7 +424,6 @@ export const createCollector = (deps: CollectorDeps): Collector => {
                 segmentId: null,
                 phase: 'pending',
                 error: null,
-                analysis: null,
               },
             ]
           }),
@@ -449,8 +435,6 @@ export const createCollector = (deps: CollectorDeps): Collector => {
           const dueIn = segment.offsetMs + segment.durationMs + FINALIZE_MS
           pass.timers.push(setTimeout(() => void uploadSegment(pass, video, index), dueIn))
         })
-        // 카메라별로 영상이 끝나는 순간 화면의 카메라 상태가 '중지'로 바뀌어야 한다.
-        pass.timers.push(setTimeout(emit, video.durationMs))
       })
       emit()
     },
@@ -471,34 +455,10 @@ export const createCollector = (deps: CollectorDeps): Collector => {
       return Math.min(Math.max(0, now() - pass.startedAt), video.durationMs)
     },
 
-    mergeAnalysis: (entries) => {
-      const changed = [...entries].filter(([key, analysis]) => {
-        const current = state.segments.get(key)
-        if (!current) return false
-        const before = current.analysis
-        return (
-          !before ||
-          before.status !== analysis.status ||
-          before.progress !== analysis.progress ||
-          before.anomalyCount !== analysis.anomalyCount
-        )
-      })
-      if (changed.length === 0) return
-      changed.forEach(([key, analysis]) => patchSegment(key, { analysis }))
-      emit()
-    },
-
     onStatus: (listener) => {
       statusListeners.add(listener)
       return () => {
         statusListeners.delete(listener)
-      }
-    },
-
-    onProgress: (listener) => {
-      progressListeners.add(listener)
-      return () => {
-        progressListeners.delete(listener)
       }
     },
   }

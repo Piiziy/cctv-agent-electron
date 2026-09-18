@@ -93,8 +93,10 @@ runBin(resolve(repo, 'apps/pc'), 'vite', [
 ], { env: { ...process.env, ...liveEnv('VITE_') } })
 
 // 2. 모바일 앱. Expo 는 출력 경로를 인자로 받고, 베이스 경로는 app.json 의 experiments.baseUrl 이 정한다.
+// --clear: EXPO_PUBLIC_* 는 번들에 글자 그대로 박히는데, Metro 캐시(임시 폴더)는 값이 바뀐 걸 모른다.
+// 비우지 않으면 로컬에서 LIVE_* 를 바꿔 구워도 예전 값이 남는다. (Vercel 은 매번 새 컨테이너라 상관없다.)
 const mobileOut = resolve(dist, 'm')
-runBin(resolve(repo, 'apps/mobile'), 'expo', ['export', '-p', 'web', '--output-dir', mobileOut], {
+runBin(resolve(repo, 'apps/mobile'), 'expo', ['export', '-p', 'web', '--clear', '--output-dir', mobileOut], {
   env: {
     ...process.env,
     EXPO_PUBLIC_DEMO: '1',

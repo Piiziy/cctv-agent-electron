@@ -59,12 +59,10 @@ export const createSupabaseAuth = (url: string, anonKey: string): AuthBackend =>
   }
 }
 
-/** 데모 계정에는 휴대폰 번호가 없다. 화면에 번호 대신 이 이름이 보인다. */
-export const LIVE_ACCOUNT_LABEL = '데모 계정'
-
 /**
  * 실서버 시연(/wanted-test)의 데모 계정 로그인 — 이메일·비밀번호.
  * 사장님 앱의 로그인은 휴대폰 인증뿐이고, 이 길은 체험판 전용이다.
+ * 화면에는 계정의 휴대폰 번호가 보인다. 번호가 없는 계정이면 이메일이 보인다.
  */
 export const signInWithPassword = async (
   url: string,
@@ -82,7 +80,7 @@ export const signInWithPassword = async (
     refresh_token?: string
     expires_in?: number
     expires_at?: number
-    user?: { id?: string }
+    user?: { id?: string; phone?: string; email?: string }
     msg?: string
     error_description?: string
   } | null
@@ -103,7 +101,7 @@ export const signInWithPassword = async (
     refreshToken: json.refresh_token ?? null,
     expiresAt,
     userId: json.user?.id ?? null,
-    phone: LIVE_ACCOUNT_LABEL,
+    phone: json.user?.phone || json.user?.email || email,
   }
 }
 

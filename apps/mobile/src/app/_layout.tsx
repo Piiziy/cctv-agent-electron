@@ -4,8 +4,9 @@ import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ApiProvider } from '../lib/api'
+import { config } from '../lib/config'
 import { eventIdFrom, pushSupported } from '../lib/notifications'
-import { installWebAppManifest, isWeb, onNotificationOpen } from '../lib/web-push'
+import { askNotificationsOnFirstTap, installWebAppManifest, isWeb, onNotificationOpen } from '../lib/web-push'
 import { SessionProvider, useSession } from '../lib/session'
 import { StoreProvider } from '../lib/store-context'
 
@@ -74,6 +75,9 @@ export default function RootLayout() {
   useEffect(() => {
     installWebAppManifest()
   }, [])
+
+  // 실서버 시연에는 알림 안내 카드가 없다. 권한은 첫 탭에 브라우저 기본 창으로만 묻는다.
+  useEffect(() => (config.live ? askNotificationsOnFirstTap() : undefined), [])
 
   return (
     <SafeAreaProvider>

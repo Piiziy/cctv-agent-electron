@@ -148,83 +148,18 @@ html, body {
 }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ---------------------------------------------- 실서버 시연 진행 (/wanted-test, 왼쪽 아래) */
+/* ---------------------------------------------- 실서버 시연 (/wanted-test) — 앱이 창을 가득 채운다 */
 
-.live-panel {
+.app-window { background: var(--surface); }
+
+/* 크기·배율은 live.ts 가 창에 맞춰 정한다. */
+.app-window #pc {
   position: fixed;
-  left: 18px;
-  bottom: 18px;
-  z-index: 10;
-  width: 344px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: 0 6px 24px rgb(20 35 61 / 0.12);
-  overflow: hidden;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  box-shadow: none;
 }
-
-.live-toggle {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 13px 16px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-.live-toggle:hover { background: #fbfcfe; }
-.live-title { flex: 1; min-width: 0; }
-.live-store { color: var(--text-2); font-weight: 500; }
-.live-clock { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
-
-.live-body {
-  padding: 0 16px 16px;
-  border-top: 1px solid var(--border);
-}
-.live-state { margin: 12px 0 0; font-size: 13px; line-height: 1.5; }
-.live-state.warn { color: var(--danger); }
-.live-body .sub { margin: 10px 0 0; line-height: 1.5; }
-
-.segments {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-  max-height: 196px;
-  overflow: auto;
-}
-.segment {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: var(--ground);
-  font-size: 12.5px;
-}
-.segment-label { color: var(--text-2); font-variant-numeric: tabular-nums; }
-.segment-status { font-weight: 600; text-align: right; }
-.segment.is-live .segment-status,
-.segment.is-bad .segment-status { color: var(--danger); }
-.segment.is-busy .segment-status { color: var(--accent); }
-.segment.is-ok .segment-status { color: var(--ok); }
-.segment.is-alert { background: #fdecec; }
-.segment.is-alert .segment-status { color: var(--danger); }
-
-.dot.is-live { background: var(--danger); animation: pulse 1.4s ease-in-out infinite; }
-.dot.is-bad { background: var(--danger); }
-
-@keyframes pulse { 50% { opacity: 0.35; } }
-
-.btn.small { margin-top: 12px; padding: 10px; font-size: 14px; }
 
 /* ---------------------------------------------- 실서버 시연을 시작하지 못한 이유 */
 
@@ -253,6 +188,5 @@ html, body {
 }
 
 @media (max-width: 720px) {
-  .phone,
-  .live-panel { display: none; }
+  .phone { display: none; }
 }

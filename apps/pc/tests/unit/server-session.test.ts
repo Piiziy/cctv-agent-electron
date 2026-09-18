@@ -181,12 +181,12 @@ describe('createServerSession', () => {
   })
 
   describe('데모 계정 로그인 (웹 체험판)', () => {
-    it('이메일·비밀번호로 토큰을 받고, 화면에는 번호 대신 이름을 보인다', async () => {
+    it('이메일·비밀번호로 토큰을 받고, 화면에는 휴대폰 로그인과 같은 모양의 번호를 보인다', async () => {
       const { session, store, fetchMock } = setup({ fetch: async () => json(200, grant('a1', 'r1')) })
 
-      const summary = await session.signInWithPassword(' demo@scene.test ', 'pw', '데모 계정')
+      const summary = await session.signInWithPassword(' demo@scene.test ', 'pw')
 
-      expect(summary).toEqual({ userId: 'user-1', phone: '데모 계정' })
+      expect(summary).toEqual({ userId: 'user-1', phone: '+821012345678' })
       const [url, init] = fetchMock.mock.calls[0]!
       expect(url).toBe('https://proj.supabase.co/auth/v1/token?grant_type=password')
       expect(JSON.parse(String(init?.body))).toEqual({ email: 'demo@scene.test', password: 'pw' })
@@ -194,11 +194,22 @@ describe('createServerSession', () => {
       await expect(session.accessToken()).resolves.toBe('a1')
     })
 
+    it('번호가 없는 계정이면 이메일을 보인다', async () => {
+      const { session } = setup({
+        fetch: async () =>
+          json(200, { ...grant('a1', 'r1'), user: { id: 'user-1', phone: '', email: 'store-test@scene.test' } }),
+      })
+      await expect(session.signInWithPassword('store-test@scene.test', 'pw')).resolves.toEqual({
+        userId: 'user-1',
+        phone: 'store-test@scene.test',
+      })
+    })
+
     it('계정이 틀리면 인증번호 문구가 아니라 계정 설정을 보라고 한다', async () => {
       const { session } = setup({
         fetch: async () => json(400, { code: 'invalid_credentials', msg: 'Invalid login credentials' }),
       })
-      await expect(session.signInWithPassword('demo@scene.test', 'wrong', '데모 계정')).rejects.toThrow(
+      await expect(session.signInWithPassword('demo@scene.test', 'wrong')).rejects.toThrow(
         '데모 계정으로 로그인하지 못했습니다',
       )
     })

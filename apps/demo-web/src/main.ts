@@ -1,4 +1,5 @@
-import { $, appUrl, fitPcFrame, renderQr, setupCollapsible, waitForFrameValue, watchViewport } from './shell'
+import qrcode from 'qrcode-generator'
+import { $, appUrl, fitPcFrame, setupCollapsible, waitForFrameValue, watchViewport } from './shell'
 
 /**
  * 데모 진행기.
@@ -36,6 +37,13 @@ interface DemoHook {
   emitRiskEvent?: (input?: { risk?: 'high' | 'medium' | 'low' }) => { id: string; cameraName?: string }
   onScenario?: (listener: (step: ScenarioStep) => void) => () => void
   applyState?: (eventId: string, state: AckState) => Promise<boolean>
+}
+
+const renderQr = (container: HTMLElement, url: string): void => {
+  const qr = qrcode(0, 'M')
+  qr.addData(url)
+  qr.make()
+  container.innerHTML = qr.createSvgTag({ margin: 0, scalable: true })
 }
 
 const PUSH_ENDPOINT = (import.meta.env.VITE_PUSH_ENDPOINT ?? '').replace(/\/+$/, '')

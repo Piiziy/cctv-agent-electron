@@ -153,7 +153,7 @@ describe('createCollector', () => {
     })
   })
 
-  it('영상 하나를 끝까지 올리면 멈춘다 — 카메라는 중지, 반복하지 않는다', async () => {
+  it('영상은 한 번만 올린다 — 끝난 뒤에도 카메라는 켜져 있고, 멈추는 것은 일시 중지뿐이다', async () => {
     const { collector, uploads } = setup()
     collector.start()
     expect(collector.status().cameras[0]?.camera).toBe('streaming')
@@ -168,11 +168,16 @@ describe('createCollector', () => {
     ])
     expect(uploads[2]?.meta.video.durationMs).toBe(10_000)
     expect(collector.progress().phase).toBe('finished')
-    expect(collector.status()).toMatchObject({ running: false, upload: 'idle' })
-    expect(collector.status().cameras[0]).toMatchObject({ camera: 'idle', uploadedCount: 3 })
+    expect(collector.status()).toMatchObject({ running: true, upload: 'idle' })
+    expect(collector.status().cameras[0]).toMatchObject({ camera: 'streaming', uploadedCount: 3 })
 
     await advance(120_000)
     expect(uploads).toHaveLength(3)
+    expect(collector.status().cameras[0]?.camera).toBe('streaming')
+
+    collector.stop()
+    expect(collector.status()).toMatchObject({ running: false })
+    expect(collector.status().cameras[0]?.camera).toBe('idle')
   })
 
   it('서버가 잠깐 죽으면 같은 조각 번호로 다시 보낸다', async () => {
@@ -217,14 +222,5 @@ describe('createCollector', () => {
     expect(collector.playheadMs('demo-aaaa1111')).toBe(12_500)
     await advance(100_000)
     expect(collector.playheadMs('demo-aaaa1111')).toBe(70_000)
-  })
-
-  it('서버 분석 상태를 조각에 붙인다', async () => {
-    const { collector } = setup()
-    collector.start()
-    await advance(31_000)
-
-    collector.mergeAnalysis(new Map([['demo-aaaa1111:0', { status: 'processing', progress: 40, anomalyCount: 0 }]]))
-    expect(collector.progress().segments[0]?.analysis).toEqual({ status: 'processing', progress: 40, anomalyCount: 0 })
   })
 })

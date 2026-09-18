@@ -17,9 +17,10 @@ dist/demo-video/   시연 영상 + 30초 조각 ← 레포루트/public/demo-vid
 
 ## 실서버 시연 (/wanted-test)
 
-셸이 PC 앱을 `?live=1` 로 연다. 그러면 PC 앱이 데모 계정으로 **실제 백엔드**에 로그인하고,
+셸이 PC 앱을 `?live=1` 로 창 가득 띄운다. 그러면 PC 앱이 데모 계정으로 **실제 백엔드**에 로그인하고,
 `public/demo-video` 의 영상을 카메라 삼아 30초 조각을 `POST /v1/segments` 로 올린다. 경고는 서버 AI 가
-판정한 것만 뜬다. 휴대폰 QR 은 `/m/?live=1` — 같은 데모 계정으로 열린다.
+판정한 것만 뜬다. 휴대폰으로 열면 `/m/?live=1`(사장님 앱)로 넘어간다 — 같은 데모 계정으로 열린다.
+셸은 설명 · 진행 표시 · QR 을 덧붙이지 않는다. 직접 그리는 것은 시작하지 못했을 때의 이유뿐이다.
 
 설정은 `LIVE_*` 환경변수다 (아래 표). 백엔드 CORS 는 같은 최상위 도메인의 https 페이지만 받으므로,
 웹 데모도 그 도메인의 하위 주소(Vercel 사용자 지정 도메인)로 열어야 한다 — `*.vercel.app` 에서는 막힌다.
@@ -31,7 +32,9 @@ npm run build -w @scene-stealer/demo-web          # 전체 굽기
 npm run preview -w @scene-stealer/demo-web        # 구운 것 띄우기 → http://localhost:4173/wanted-test/
 ```
 
-## 심사위원 동선
+## 가짜 서버 데모 동선 (/index.html)
+
+실서버 시연(/wanted-test) 동선은 [`docs/demo-submission.md`](../../docs/demo-submission.md) 에 있다.
 
 1. 노트북에서 데모 링크를 연다 → 매장 PC 화면이 그대로 뜬다
 2. **QR 을 휴대폰으로 찍는다** → 사장님 앱이 열리고 알림 권한을 묻는다
@@ -39,7 +42,7 @@ npm run preview -w @scene-stealer/demo-web        # 구운 것 띄우기 → htt
 4. **위험 상황 만들기** → PC 에 경고가 뜨고, 같은 순간 휴대폰에 알림이 간다
 5. 알림을 탭하면 그 클립이 재생되는 상세 화면 → **확인했어요** 로 처리한다
 
-## 진짜인 것과 흉내인 것
+## 가짜 서버 데모 — 진짜인 것과 흉내인 것
 
 페이지에도 적어 두었지만, 여기서도 분명히 해 둔다.
 

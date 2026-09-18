@@ -45,10 +45,10 @@ export interface ServerSession {
   sendOtp(phone: string): Promise<void>
   verifyOtp(phone: string, code: string): Promise<SessionSummary>
   /**
-   * 이메일·비밀번호 로그인 — 웹 데모(/wanted-test)의 데모 계정 전용이다.
-   * 매장 PC 는 휴대폰 인증만 쓴다. label 은 화면에 휴대폰 번호 대신 보일 이름이다.
+   * 이메일·비밀번호 로그인 — 웹 데모(/wanted-test)의 데모 계정 전용이다. 매장 PC 는 휴대폰 인증만 쓴다.
+   * 화면에는 계정의 휴대폰 번호가 보인다. 번호가 없는 계정이면 이메일이 보인다.
    */
-  signInWithPassword(email: string, password: string, label: string): Promise<SessionSummary>
+  signInWithPassword(email: string, password: string): Promise<SessionSummary>
   signOut(): Promise<void>
   summary(): SessionSummary | null
   /** 유효한 액세스 토큰. 만료가 가까우면 갱신한다. 로그인 안 됐으면 null. */
@@ -77,7 +77,7 @@ interface GrantResponse {
   readonly access_token: string
   readonly refresh_token: string
   readonly expires_in: number
-  readonly user?: { readonly id?: string; readonly phone?: string }
+  readonly user?: { readonly id?: string; readonly phone?: string; readonly email?: string }
 }
 
 const isGrant = (value: unknown): value is GrantResponse => {
@@ -191,7 +191,7 @@ export const createServerSession = (deps: ServerSessionDeps): ServerSession => {
       return { userId: tokens.userId, phone: tokens.phone }
     },
 
-    signInWithPassword: async (email, password, label) => {
+    signInWithPassword: async (email, password) => {
       const grant = await post('/token?grant_type=password', { email: email.trim(), password }).catch(
         (error: unknown) => {
           // 인증번호용 문구('인증번호가 맞지 않거나…')가 나가면 무엇이 틀렸는지 모른다.
@@ -202,7 +202,9 @@ export const createServerSession = (deps: ServerSessionDeps): ServerSession => {
         },
       )
       if (!isGrant(grant)) throw new SessionError('로그인 서버 응답이 올바르지 않습니다.')
-      const tokens = adopt(grant, label)
+      // Supabase 는 번호를 '821012345678' 로 준다. 휴대폰 로그인과 같은 모양(+82…)으로 맞춘다.
+      const phone = grant.user?.phone ? (toE164Kr(grant.user.phone) ?? grant.user.phone) : null
+      const tokens = adopt(grant, phone ?? grant.user?.email ?? email.trim())
       return { userId: tokens.userId, phone: tokens.phone }
     },
 

@@ -76,6 +76,7 @@ const FILL = 'absolute inset-0 size-full object-cover'
  *
  * 시작 지점(#t=)이 붙은 영상은 그 지점부터 끝까지 한 번만 튼다. 실서버 데모가 지금 올리고
  * 있는 장면과 화면을 맞추는 방법이다 — 반복하면 서버로 간 조각과 화면이 어긋난다.
+ * 끝나면 마지막 장면에 머문다. 끝난 영상에 play() 를 부르면 처음부터 다시 트니 부르지 않는다.
  * 브라우저는 뒤로 간 탭의 음소거 영상을 멈춘다. 돌아오면 그동안 흐른 만큼 앞으로 맞춘다.
  */
 const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile' | 'full' }) => {
@@ -90,9 +91,12 @@ const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile
       const video = videoRef.current
       if (!video || document.visibilityState !== 'visible') return
       const target = Number(start) + (Date.now() - mountedAt) / 1000
-      if (Math.abs(video.currentTime - target) > 1) {
-        video.currentTime = Number.isFinite(video.duration) ? Math.min(target, video.duration) : target
+      if (Number.isFinite(video.duration) && target >= video.duration) {
+        video.pause()
+        video.currentTime = video.duration
+        return
       }
+      if (Math.abs(video.currentTime - target) > 1) video.currentTime = target
       void video.play().catch(() => undefined)
     }
     document.addEventListener('visibilitychange', resync)
@@ -110,7 +114,9 @@ const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile
         muted
         playsInline
         // autoPlay 속성만으로는 브라우저가 거를 때가 있다. 준비되면 한 번 더 밀어 본다.
-        onLoadedData={(event) => void event.currentTarget.play().catch(() => undefined)}
+        onLoadedData={(event) => {
+          if (!event.currentTarget.ended) void event.currentTarget.play().catch(() => undefined)
+        }}
       />
     ) : (
       <img src={preview.url} alt="" className={FILL} />

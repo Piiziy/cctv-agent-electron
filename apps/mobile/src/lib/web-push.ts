@@ -170,6 +170,26 @@ export const enableWebNotifications = async (): Promise<WebPushState> => {
   }
 }
 
+/**
+ * 실서버 시연 — 안내 카드 없이 실제 앱처럼 브라우저의 알림 권한 창만 띄운다. 브라우저는 사용자가
+ * 화면을 누른 직후에만 권한을 물을 수 있어서 첫 탭에 묻는다 (네이티브 앱이 처음 켤 때 묻는 자리).
+ * 스크롤은 탭이 아니다 — 'click' 만 본다. 이미 허용·거부했거나 알림을 못 쓰는 브라우저
+ * (홈 화면에 추가하지 않은 아이폰 사파리 등)면 아무것도 하지 않는다.
+ */
+export const askNotificationsOnFirstTap = (): (() => void) => {
+  if (!notificationSupported() || Notification.permission !== 'default') return () => undefined
+  const controller = new AbortController()
+  document.addEventListener(
+    'click',
+    () => {
+      controller.abort()
+      void enableWebNotifications()
+    },
+    { capture: true, signal: controller.signal },
+  )
+  return () => controller.abort()
+}
+
 /** 서버 없이 지금 당장 알림 하나를 띄운다. 페이지가 살아 있을 때만 보인다. */
 export const showLocalNotification = async (
   title: string,

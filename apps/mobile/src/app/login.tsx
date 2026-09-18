@@ -12,7 +12,7 @@ import { useSession } from '../lib/session'
  */
 /**
  * 실서버 시연에서는 로그인 화면이 없다 — 데모 계정으로 들어가지 못했을 때만 여기로 온다.
- * 휴대폰 인증 칸을 보여 봐야 심사위원은 쓸 번호가 없다. 이유와 다시 시도만 둔다.
+ * 휴대폰 인증 칸을 보여 봐야 심사위원은 쓸 번호가 없다. 앱 첫 화면 그대로에 이유와 다시 시도만 둔다.
  */
 const LiveSignInProblem = () => {
   const { liveError, accessToken } = useSession()
@@ -22,7 +22,7 @@ const LiveSignInProblem = () => {
       <View style={styles.content}>
         <View style={styles.brandBlock}>
           <Text style={styles.brand}>Scene Stealer</Text>
-          <Text style={styles.lede}>실서버 시연용 데모 계정으로 들어가는 중입니다.</Text>
+          <Text style={styles.lede}>매장에서 일어난 이상 행동을{'\n'}바로 알려드립니다.</Text>
         </View>
         {liveError ? <Caption tone="danger">{liveError}</Caption> : null}
         <Button

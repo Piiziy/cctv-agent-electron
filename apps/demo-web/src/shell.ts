@@ -1,8 +1,6 @@
-import qrcode from 'qrcode-generator'
-
 /**
  * 두 데모 셸(`/` 가짜 서버 데모, `/wanted-test` 실서버 데모)이 같이 쓰는 뼈대.
- * PC 앱을 iframe 으로 띄워 창에 맞게 줄이고, 휴대폰으로 넘어갈 QR 을 그린다.
+ * 창 맞춤·접는 카드·휴대폰 안내는 가짜 서버 데모만 쓴다 — 실서버 데모는 앱 화면만 보인다.
  */
 
 export const $ = <T extends HTMLElement>(id: string): T => {
@@ -17,13 +15,6 @@ export const $ = <T extends HTMLElement>(id: string): T => {
  */
 export const appUrl = (path: string): string =>
   new URL(path, `${location.origin}${import.meta.env.BASE_URL}`).href
-
-export const renderQr = (container: HTMLElement, url: string): void => {
-  const qr = qrcode(0, 'M')
-  qr.addData(url)
-  qr.make()
-  container.innerHTML = qr.createSvgTag({ margin: 0, scalable: true })
-}
 
 const PC_WIDTH = 1280
 const PC_HEIGHT = 860

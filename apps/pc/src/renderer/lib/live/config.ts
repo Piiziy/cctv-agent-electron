@@ -50,9 +50,6 @@ const REQUIRED: readonly (readonly [keyof LiveConfig, string])[] = [
 export const missingLiveConfig = (config: LiveConfig = liveConfig): string[] =>
   REQUIRED.filter(([key]) => !config[key]).map(([, name]) => name)
 
-/** 화면에 휴대폰 번호 대신 보일 이름. 데모 계정에는 번호가 없다. */
-export const LIVE_ACCOUNT_LABEL = '데모 계정'
-
 const queryOf = (source: string): URLSearchParams => {
   const start = source.indexOf('?')
   return new URLSearchParams(start === -1 ? '' : source.slice(start + 1))
