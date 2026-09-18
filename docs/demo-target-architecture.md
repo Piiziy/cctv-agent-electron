@@ -60,15 +60,14 @@ PC 앱 CSP 는 웹 데모 빌드에서만 `LIVE_API_URL` · `LIVE_SUPABASE_URL` 
 
 PR: https://github.com/SceneStealer1/scene-stealer-back/pull/1
 
-1. **설계 합의 후 머지.** 우리 PR 뒤에 팀원이 main 에 따로 도메인 API 를 넣었다(9/16). `stores`·`devices`·
-   `cameras` 가 겹치는데 모양이 다르다. 프론트는 PR 쪽 계약(`docs/api-contract.md`)에 맞춰져 있다.
-2. **도메인 + HTTPS.** nginx 가 80 평문만 받는다. HTTPS 인 페이지는 HTTP API 를 부르지 못한다.
-   도메인을 하나 정해 백엔드를 `https://api.<도메인>` 같은 하위 주소로 연다 (Caddy · Cloudflare Tunnel ·
-   certbot 중 하나).
-3. **CORS — ✅ PR 에 넣었다** (`80e842a`). `CORS_ALLOWED_DOMAIN=<도메인>` 이면 그 도메인과 하위 도메인의
-   https 페이지만 허용한다 (backend · ingest-worker 같은 규칙, 계약 1.6). 그래서 **웹 체험판도 같은 도메인의
-   하위 주소로 열어야 한다** — Vercel 에 `demo.<도메인>` 같은 사용자 지정 도메인을 붙인다.
-   `*.vercel.app` 주소에서는 `/wanted-test` 가 막힌다.
+1. **설계 합의 후 머지 → `api.scene-stealer.site` 를 PR 버전으로 다시 배포.** 우리 PR 뒤에 팀원이 main 에
+   따로 도메인 API 를 넣었다(9/16). `stores`·`devices`·`cameras` 가 겹치는데 모양이 다르다. 프론트는 PR 쪽
+   계약(`docs/api-contract.md`)에 맞춰져 있다. 2026-09-18 에 확인한 `api.scene-stealer.site` 는 **팀원 main
+   버전**이다 — `/stores` 가 503(Supabase·JWT 설정 없음)이고, 이벤트·실시간 채널·기기 등록·하트비트 경로가 없다.
+2. **도메인 + HTTPS — ✅ 됨.** 웹 `https://app.scene-stealer.site`(Vercel), API `https://api.scene-stealer.site`.
+   둘 다 코드에 기본값으로 들어 있다 (`build-all.mjs` 의 `LIVE_API_URL`, 백엔드 `CORS_ALLOWED_DOMAIN`).
+3. **CORS — ✅ PR 에 넣었다** (`80e842a`, `5c9fd4e`). `scene-stealer.site` 와 그 하위 도메인의 https 페이지만
+   허용한다 (backend · ingest-worker 같은 규칙, 계약 1.6). `*.vercel.app` 주소에서는 `/wanted-test` 가 막힌다.
 4. **웹 푸시 — 하지 않기로 했다** (2026-09-18). 백엔드 `push.py`(레거시 FCM)·`/push/devices` 는 손대지 않는다.
 5. **새 Supabase 프로젝트 + 스키마.** 팀원 스키마가 들어간 프로젝트에 적용하면 `create table if not exists`
    때문에 겹치는 테이블이 팀원 모양으로 남는다.

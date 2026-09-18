@@ -60,7 +60,8 @@ npm run build -w @scene-stealer/demo-web
 | `DEMO_PUSH_ENDPOINT` | 휴대폰이 **페이지를 열어 둔 동안에만** 알림을 받는다 |
 | `DEMO_VAPID_PUBLIC_KEY` | 위와 같음 |
 | `DEMO_CLIP_URL` | 같이 구운 `m/clips/sample.mp4` 를 쓴다 |
-| `LIVE_API_URL` · `LIVE_SUPABASE_URL` · `LIVE_SUPABASE_ANON_KEY` · `LIVE_EMAIL` · `LIVE_PASSWORD` · `LIVE_DEVICE_TOKEN` | `/wanted-test` 가 빠진 이름을 화면에 띄운다. `/` 는 영향 없음 |
+| `LIVE_SUPABASE_URL` · `LIVE_SUPABASE_ANON_KEY` · `LIVE_EMAIL` · `LIVE_PASSWORD` · `LIVE_DEVICE_TOKEN` | `/wanted-test` 가 빠진 이름을 화면에 띄운다. `/` 는 영향 없음 |
+| `LIVE_API_URL` | `https://api.scene-stealer.site` |
 | `LIVE_STORE_ID` | 데모 계정의 첫 매장 |
 | `DEMO_VIDEO_HEIGHT` · `DEMO_VIDEO_FPS` · `DEMO_SEGMENT_SECONDS` | 480 · 15 · 30 |
 

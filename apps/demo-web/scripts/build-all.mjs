@@ -45,7 +45,14 @@ const LIVE_KEYS = [
   'LIVE_DEVICE_TOKEN',
   'LIVE_STORE_ID',
 ]
-const live = Object.fromEntries(LIVE_KEYS.map((key) => [key, (process.env[key] ?? '').trim()]))
+/**
+ * 서비스 도메인은 고정이라 기본값으로 박아 둔다 — 웹은 app.scene-stealer.site, API 는 api.scene-stealer.site.
+ * 백엔드 CORS 도 같은 최상위 도메인만 받는다. 다른 서버를 볼 때만 LIVE_API_URL 로 바꾼다.
+ */
+const LIVE_DEFAULTS = { LIVE_API_URL: 'https://api.scene-stealer.site' }
+const live = Object.fromEntries(
+  LIVE_KEYS.map((key) => [key, (process.env[key] ?? '').trim() || (LIVE_DEFAULTS[key] ?? '')]),
+)
 /** 앱마다 번들러가 받아 주는 접두사가 다르다 (Vite: VITE_, Expo: EXPO_PUBLIC_). */
 const liveEnv = (prefix, keys = LIVE_KEYS) => Object.fromEntries(keys.map((key) => [`${prefix}${key}`, live[key]]))
 

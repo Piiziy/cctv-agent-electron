@@ -70,15 +70,17 @@ Vercel 프로젝트 **Settings → Environment Variables** 에 두 개를 넣는
 **① 시연 영상.** `public/demo-video/` 에 넣고 푸시한다. 빌드가 30초 조각으로 자른다
 ([`public/demo-video/README.md`](../public/demo-video/README.md)).
 
-**② 도메인.** 백엔드는 같은 최상위 도메인의 https 페이지만 받는다 (CORS, 계약 1.6). 도메인 하나로 둘 다 연다.
+**② 도메인 — 정해져 있고 코드에 기본값으로 들어 있다.** 백엔드는 같은 최상위 도메인의 https
+페이지만 받는다 (CORS, 계약 1.6).
 
-| | 예 (`example.com` 자리에 정한 도메인) |
-|---|---|
-| 백엔드 | `https://api.example.com` — HTTPS 인증서 필요. 백엔드 `.env` 에 `CORS_ALLOWED_DOMAIN=example.com` |
-| 웹 데모 | `https://demo.example.com` — Vercel 프로젝트 Settings → Domains 에 추가하고 안내대로 DNS(CNAME) 설정. 인증서는 Vercel 이 발급한다 |
-| 제출 링크 | `https://demo.example.com/wanted-test` |
+| | 주소 | 상태 (2026-09-18) |
+|---|---|---|
+| 웹 데모 | `https://app.scene-stealer.site` | Vercel 에 연결됨 |
+| 백엔드 | `https://api.scene-stealer.site` | HTTPS 로 떠 있음. 단 **팀원 main 버전**이라 프론트가 쓰는 API 가 없다 — PR 버전으로 바꿔 배포해야 한다 |
+| 제출 링크 | `https://app.scene-stealer.site/wanted-test` | |
 
-`*.vercel.app` 주소로 연 `/wanted-test` 는 CORS 에 막혀 "백엔드에 연결할 수 없습니다" 가 뜬다.
+프론트의 API 주소(`LIVE_API_URL`)와 백엔드의 CORS 도메인(`CORS_ALLOWED_DOMAIN`)은 이 값이 기본이라 따로
+넣지 않아도 된다. `*.vercel.app` 주소로 연 `/wanted-test` 는 CORS 에 막힌다.
 
 **③ 데모 데이터.** 새 Supabase 프로젝트에 스키마를 적용한 뒤
 
@@ -92,12 +94,12 @@ Vercel 프로젝트 **Settings → Environment Variables** 에 두 개를 넣는
 
 | 이름 | 값 |
 |---|---|
-| `LIVE_API_URL` | 백엔드 주소 (**https**, 예 `https://api.example.com`) |
-| `LIVE_SUPABASE_URL` | `https://<프로젝트>.supabase.co` |
+| `LIVE_SUPABASE_URL` | `https://<프로젝트>.supabase.co` — 백엔드가 쓰는 것과 같은 프로젝트 |
 | `LIVE_SUPABASE_ANON_KEY` | Supabase anon 공개키 |
 | `LIVE_EMAIL` · `LIVE_PASSWORD` | ③-1 의 데모 계정 |
 | `LIVE_DEVICE_TOKEN` | ③-3 의 기기 토큰 |
 | `LIVE_STORE_ID` | (선택) 매장이 여럿이면 쓸 매장 id. 비우면 첫 매장 |
+| `LIVE_API_URL` | (선택) 기본값 `https://api.scene-stealer.site`. 다른 서버를 볼 때만 |
 
 > ⚠️ 이 값들은 **번들에 박혀 공개된다.** 주소를 아는 사람은 누구나 데모 계정으로 들어온다.
 > 데모 전용 계정·매장만 쓰고, 다른 데이터가 있는 계정은 절대 넣지 않는다.
