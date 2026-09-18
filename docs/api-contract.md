@@ -557,9 +557,22 @@ backend:   ANOMALY_POLL_SEC(기본 5초)마다 새 행을 읽음 → events inse
 
 PUT 본문도 같은 모양이다. `minRisk` 가 셋 중 하나가 아니면 400.
 
+`platform` 은 `"expo"` | `"ios"` | `"android"`. 모바일 앱은 **`"expo"` 로 보낸다** —
+Firebase 프로젝트도 APNs 키도 없이 실제 발송을 확인할 수 있는 유일한 길이라
+Expo 푸시 토큰(`ExponentPushToken[...]`)을 쓴다. 서버는 이 토큰을
+`https://exp.host/--/api/v2/push/send` 로 그대로 보내면 된다
+(참고 구현: `apps/mobile/tools/send-push.mjs`). 나중에 APNs/FCM 로 직접 갈 때
+`platform` 만 바꾸면 되도록 값에 실어 둔다.
+
+> ⚠️ `scene-stealer-back` 의 `push.py` 는 구글이 닫은 레거시 FCM(`/fcm/send`)을 쓴다.
+> 실제 발송을 붙일 때 HTTP v1 또는 Expo 푸시 API 로 바꿔야 한다.
+
 발송(6.4)은 서버 내부. 리치 푸시에 썸네일 + 액션 2개("클립 보기" / "112"),
 제목은 `매장명 · 카메라명`, 본문은 `이상 행동이 감지되었습니다 · 위험도 높음`.
 판정 순서: `min_risk` 미만 → 안 보냄, 영업시간엔 높음만, 수면시간엔 높음만 소리, 높음은 방해금지 무시(설정 시).
+
+푸시 본문의 `data` 에는 **`eventId` 를 반드시 넣는다** — 앱은 이 값만 보고 상세 화면으로 간다.
+없으면 앱은 홈에 머문다 (`apps/mobile/src/lib/push-payload.ts`).
 
 재알림(6.5)·시스템 알림(6.6)은 2순위 — 스키마는 `events.state`와 `devices.last_heartbeat_at`으로 충분하다.
 
@@ -576,6 +589,19 @@ PUT 본문도 같은 모양이다. `minRisk` 가 셋 중 하나가 아니면 400
 | 2e 위험 기록 | `GET /stores/:id/events`(필터), `GET /stores/:id/events/timeline`, `GET /stores/:id/events/summary` |
 | 2f 상세·증거 | `GET /events/:id`, `GET /stores/:id/segments`, `GET /events/:id/clip`, `PATCH .../memo` |
 | 2g 설정 | `PATCH /stores/:id`, `GET/PUT .../notification-settings`, `GET /stores/:id/cameras` |
+
+모바일(`apps/mobile`)은 같은 엔드포인트를 쓰되 실시간 영상과 SSE 를 쓰지 않는다 —
+화면에 들어올 때마다 다시 읽고(`useFocusEffect`), 아래로 당겨 새로고침한다.
+
+| 화면 | 엔드포인트 |
+|---|---|
+| 2k 홈 | `GET /stores`, `GET /stores/:id/monitoring`, `GET /stores/:id/events?date=today` |
+| 2l 기록 | `GET /stores/:id/events`, `GET /stores/:id/events/timeline`, `GET /stores/:id/monitoring`(카메라 필터) |
+| 2j 상세·대응 | `GET /events/:id`, `GET /events/:id/nearby-cameras`, `PATCH /events/:id/state`(`source: "mobile"`) |
+| 2m 설정 | `GET/PUT /stores/:id/notification-settings`, `POST .../test`, `POST /push/devices` |
+
+'이번 주 요약'(5.8)은 서버가 아직 안 주므로 모바일이 목록으로 계산한다.
+계약에 없는 '신고 건수'는 만들어 내지 않는다.
 
 라이브 미리보기(2b ②, 2c 격자)는 **서버를 거치지 않는다** — PC 로컬 RTSP다 (3.4).
 기존 `apps/pc/src/main/services/preview-stream.ts`를 그대로 쓴다.
