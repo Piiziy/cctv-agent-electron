@@ -6,6 +6,7 @@ import type { EventListItem, Monitoring } from '@scene-stealer/api'
 import { colors, radius, spacing, type as type_ } from '@scene-stealer/tokens'
 import { Caption, Card, Chip, EmptyState, Heading } from '../../components/ui'
 import { EventRow } from '../../components/EventRow'
+import { DemoNotice } from '../../components/DemoNotice'
 import { useApi } from '../../lib/api'
 import { cameraStateLabel, elapsedLabel, localDate, timeOf } from '../../lib/format'
 import { useStores } from '../../lib/store-context'
@@ -48,6 +49,8 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={busy} onRefresh={() => { void refresh(); void load() }} />}
       >
+        <DemoNotice />
+
         <View style={styles.chips}>
           {stores.map((store) => (
             <Chip

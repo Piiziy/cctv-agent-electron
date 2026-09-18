@@ -1,0 +1,58 @@
+name: 웹 데모 배포
+
+# 심사 기간(2026-09-21 ~ 10-17) 동안 계속 열려 있어야 하는 페이지다.
+# main 에 올라갈 때마다 다시 굽고, 손으로도 돌릴 수 있게 열어 둔다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - '.github/workflows/demo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포가 겹치면 나중 것만 살린다. 중간 것 때문에 페이지가 잠깐 깨지는 걸 막는다.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 데모 굽기
+        working-directory: apps/demo-web
+        env:
+          DEMO_BASE: /cctv-agent-electron/
+          # 없으면 휴대폰은 페이지를 열어 둔 동안에만 알림을 받는다 — 배포는 그대로 성공한다.
+          DEMO_PUSH_ENDPOINT: ${{ vars.DEMO_PUSH_ENDPOINT }}
+          DEMO_VAPID_PUBLIC_KEY: ${{ vars.DEMO_VAPID_PUBLIC_KEY }}
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/demo-web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

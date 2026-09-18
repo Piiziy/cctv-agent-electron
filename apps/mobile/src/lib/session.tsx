@@ -7,6 +7,15 @@ import type { Session } from './session-types'
 
 const KEY = 'scene-stealer.session'
 
+/** 데모 모드 전용 가짜 세션. 가짜 서버가 토큰을 보지 않으므로 값은 아무거나 된다. */
+const DEMO_SESSION: Session = {
+  accessToken: 'demo',
+  refreshToken: null,
+  expiresAt: null,
+  userId: 'demo-owner',
+  phone: '010-0000-0000',
+}
+
 /** 웹에는 SecureStore 가 없다. 개발용 미리보기라 localStorage 로 떨어뜨린다. */
 const storage = {
   get: async (): Promise<string | null> =>
@@ -43,7 +52,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     void (async () => {
       const raw = await storage.get().catch(() => null)
-      setSession(raw ? (JSON.parse(raw) as Session) : null)
+      // 데모 페이지에서는 심사위원에게 로그인을 시키지 않는다. 볼 것은 로그인 화면이 아니다.
+      setSession(raw ? (JSON.parse(raw) as Session) : config.demo ? DEMO_SESSION : null)
       setLoading(false)
     })()
   }, [])

@@ -1,0 +1,222 @@
+/* 색은 PC·모바일 앱과 같은 피그마 토큰에서 가져왔다. 세 화면이 한 제품으로 보여야 한다. */
+:root {
+  --brand: #14233d;
+  --accent: #3b6ff5;
+  --danger: #d23531;
+  --ok: #12a85f;
+  --text: #1a1c20;
+  --text-2: #6b7280;
+  --border: #dcdee3;
+  --surface: #ffffff;
+  --ground: #f4f6fa;
+  --radius: 14px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+/* .pane 처럼 display 를 지정한 요소는 hidden 속성만으로는 안 숨는다. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  padding: 0 24px 48px;
+  background: var(--ground);
+  color: var(--text);
+  font: 15px/1.6 Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 0 8px;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand h1 { margin: 0; font-size: 19px; letter-spacing: -0.2px; }
+.brand p { margin: 0; font-size: 13px; color: var(--text-2); }
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 800;
+}
+
+.top nav a {
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: var(--surface);
+}
+.top nav a:hover { color: var(--text); border-color: #c7cbd4; }
+
+.lede {
+  max-width: 1400px;
+  margin: 8px auto 20px;
+  color: #3d4450;
+  font-size: 15.5px;
+}
+.lede strong { color: var(--brand); }
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.pane, .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.pane-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.pane-head h2 { margin: 0; font-size: 15px; }
+.tag {
+  font-size: 12px; color: var(--accent);
+  background: #eef3ff; border-radius: 999px; padding: 4px 10px;
+}
+
+/*
+ * PC 앱은 데스크톱 창을 전제로 만든 화면이라 좁히면 상단 메뉴가 줄바꿈된다.
+ * 그래서 폭을 1280px 로 고정해 렌더하고, 자리에 맞게 통째로 축소한다.
+ * 심사위원 화면이 넓든 좁든 앱은 늘 제 비율로 보인다.
+ */
+.frame-wrap { background: var(--ground); overflow: hidden; }
+#pc {
+  display: block;
+  width: 1280px;
+  height: 860px;
+  border: 0;
+  background: var(--surface);
+  transform-origin: 0 0;
+}
+
+.note {
+  margin: 0;
+  padding: 12px 18px;
+  font-size: 13px;
+  color: var(--text-2);
+  border-top: 1px solid var(--border);
+  background: #fbfcfe;
+}
+
+.panel { padding: 6px 18px 18px; }
+
+.steps { list-style: none; margin: 0; padding: 0; }
+.step { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.step:last-child { border-bottom: 0; }
+.step h3 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 9px; }
+.step p { margin: 0 0 12px; font-size: 13.5px; color: var(--text-2); }
+
+.num {
+  display: grid; place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--brand); color: #fff;
+  font-size: 12px; font-weight: 700;
+}
+.step.done .num { background: var(--ok); }
+
+.qr {
+  width: 176px; height: 176px;
+  display: grid; place-items: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+.qr svg, .qr img { width: 100%; height: 100%; }
+
+.code { margin: 0 0 4px; font-size: 13px; color: var(--text-2); }
+.code b { color: var(--text); letter-spacing: 2px; font-size: 15px; }
+
+.sub { margin: 4px 0 0; font-size: 12.5px; color: var(--text-2); }
+.sub.ok { color: var(--ok); }
+.sub.warn { color: var(--danger); }
+
+.btn {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: #c7cbd4; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+.log { list-style: none; margin: 12px 0 0; padding: 0; font-size: 13px; }
+.log li {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 5px 0;
+  color: var(--text-2);
+  border-top: 1px dashed var(--border);
+}
+.log li:first-child { border-top: 0; }
+.log time { color: #9aa1ad; font-variant-numeric: tabular-nums; font-size: 12px; }
+.log li.hit { color: var(--danger); font-weight: 600; }
+
+.about { margin-top: 14px; font-size: 13px; color: var(--text-2); }
+.about summary { cursor: pointer; color: var(--text); font-weight: 600; }
+.about p { margin: 8px 0 0; }
+.about b { color: var(--text); }
+
+.foot {
+  max-width: 1400px;
+  margin: 24px auto 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+@media (max-width: 1080px) {
+  .stage { grid-template-columns: 1fr; }
+  #pc { height: 560px; }
+}
+
+@media (max-width: 640px) {
+  body { padding: 0 14px 32px; }
+  #pc { height: 460px; }
+  .qr { width: 150px; height: 150px; }
+}
+
+/* 휴대폰으로 데모 주소를 연 경우 — 데스크톱 앱 화면을 들이밀지 않는다. */
+.handoff {
+  max-width: 1400px;
+  margin: 0 auto 18px;
+  background: var(--brand);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.handoff h2 { margin: 0 0 8px; font-size: 17px; }
+.handoff p { margin: 0 0 14px; font-size: 14px; line-height: 1.55; opacity: 0.9; }
+.handoff b { opacity: 1; }
+.handoff .btn { display: block; text-align: center; text-decoration: none; }
+.handoff .sub { margin: 10px 0 0; opacity: 0.66; font-size: 12.5px; }

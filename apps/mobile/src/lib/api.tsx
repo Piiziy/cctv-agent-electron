@@ -11,7 +11,7 @@ export const ApiProvider = ({ children }: { children: ReactNode }) => {
   const api = useMemo<SceneStealerApi>(
     () =>
       usingMockApi
-        ? createMockApi()
+        ? createMockApi(config.clipUrl ? { clipUrl: config.clipUrl } : {})
         : createApiClient({
             baseUrl: config.apiUrl,
             getToken: async () => session?.accessToken ?? null,

@@ -65,7 +65,7 @@ const minutesAgo = (minutes: number): string => new Date(Date.now() - minutes * 
 
 /* ------------------------------------------------------------------ 시드 */
 
-const STORE_GANGNAM = 'store-gangnam-1'
+export const STORE_GANGNAM = 'store-gangnam-1'
 const STORE_YEOKSAM = 'store-yeoksam'
 const USER_ID = 'user-mock-owner'
 
@@ -74,26 +74,45 @@ interface CameraRow extends CameraDto {
   readonly stateUpdatedAt: string | null
 }
 
-const camera = (
-  idSuffix: string,
-  sortOrder: number,
-  name: string,
-  locationTag: LocationTag,
-  state: CameraRuntimeState,
-  lastFrameMinutesAgo: number,
-): CameraRow => ({
-  id: `cam-${idSuffix}`,
+export interface CameraSeed {
+  readonly suffix: string
+  readonly name: string
+  readonly locationTag: LocationTag
+  readonly state: CameraRuntimeState
+  readonly lastFrameMinutesAgo: number
+}
+
+/** 이 PC 가 부르는 카메라 id. 서버 카메라와 이어 붙는 유일한 키다 — 2c 타일이 이걸로 조인한다. */
+export const agentCameraIdOf = (suffix: string): string => `urn:uuid:mock-${suffix}`
+export const serverCameraIdOf = (suffix: string): string => `cam-${suffix}`
+
+/**
+ * 시드 카메라. 데모 부팅(lib/demo.ts)이 '이 PC 에 등록된 카메라' 목록을 만들 때도 같은 표를
+ * 읽는다 — 두 곳에 따로 적으면 id 가 조용히 어긋나 타일이 서버 이름·끊김 시간을 못 찾는다.
+ */
+export const CAMERA_SEEDS: readonly CameraSeed[] = [
+  { suffix: '01', name: '계산대', locationTag: 'checkout', state: 'connected', lastFrameMinutesAgo: 0 },
+  { suffix: '02', name: '출입문', locationTag: 'entrance', state: 'connected', lastFrameMinutesAgo: 1 },
+  { suffix: '03', name: '진열대 A', locationTag: 'shelf', state: 'connected', lastFrameMinutesAgo: 1 },
+  { suffix: '04', name: '취식대', locationTag: 'dining', state: 'connected', lastFrameMinutesAgo: 1 },
+  // 디자인 2c — "◌ 재연결 중 · 마지막 화면 14:20 · 창고 끊김 11분"
+  { suffix: '05', name: '창고', locationTag: 'storage', state: 'reconnecting', lastFrameMinutesAgo: 11 },
+]
+
+const cameraRow = (seed: CameraSeed, sortOrder: number): CameraRow => ({
+  id: serverCameraIdOf(seed.suffix),
   storeId: STORE_GANGNAM,
-  agentCameraId: `urn:uuid:mock-${idSuffix}`,
-  name,
-  locationTag,
+  agentCameraId: agentCameraIdOf(seed.suffix),
+  name: seed.name,
+  locationTag: seed.locationTag,
   sortOrder,
   streamProfile: 'sub',
-  state,
-  lastFrameAt: minutesAgo(lastFrameMinutesAgo),
-  lastSegmentAt: minutesAgo(lastFrameMinutesAgo),
+  state: seed.state,
+  lastFrameAt: minutesAgo(seed.lastFrameMinutesAgo),
+  lastSegmentAt: minutesAgo(seed.lastFrameMinutesAgo),
   deletedAt: null,
-  stateUpdatedAt: state === 'connected' ? minutesAgo(180) : minutesAgo(lastFrameMinutesAgo),
+  stateUpdatedAt:
+    seed.state === 'connected' ? minutesAgo(180) : minutesAgo(seed.lastFrameMinutesAgo),
 })
 
 interface EventRow extends EventDetail {
@@ -134,7 +153,14 @@ const event = (input: {
   history: [],
 })
 
-const initialDb = () => ({
+/** 데모 부팅에서 강남 1호점에 덧씌우는 값 — 이미 이 PC 가 연결됐고, 조각도 짧다. */
+export interface DemoStoreSeed {
+  readonly segmentSeconds: SegmentSeconds
+  readonly deviceId: string
+  readonly deviceLabel: string
+}
+
+const initialDb = (demo?: DemoStoreSeed) => ({
   stores: [
     {
       id: STORE_GANGNAM,
@@ -142,10 +168,21 @@ const initialDb = () => ({
       address: '서울 강남구 테헤란로 123 1층',
       opensAt: '09:00',
       closesAt: '21:00',
-      segmentSeconds: 60 as SegmentSeconds,
+      segmentSeconds: demo?.segmentSeconds ?? (60 as SegmentSeconds),
       clipRetentionDays: 30,
       cameraCount: 5,
-      device: null,
+      device: demo
+        ? {
+            id: `device-${STORE_GANGNAM}`,
+            deviceId: demo.deviceId,
+            label: demo.deviceLabel,
+            agentVersion: '1.0.0',
+            online: true,
+            lastHeartbeatAt: new Date().toISOString(),
+            spoolBytes: 0,
+            uploadedBytesToday: Math.round(1.8 * 1024 ** 3),
+          }
+        : null,
       unconfirmedCount: 0,
     },
     {
@@ -171,14 +208,7 @@ const initialDb = () => ({
       unconfirmedCount: 0,
     },
   ] as readonly StoreDto[],
-  cameras: [
-    camera('01', 1, '계산대', 'checkout', 'connected', 0),
-    camera('02', 2, '출입문', 'entrance', 'connected', 1),
-    camera('03', 3, '진열대 A', 'shelf', 'connected', 1),
-    camera('04', 4, '취식대', 'dining', 'connected', 1),
-    // 디자인 2c — "◌ 재연결 중 · 마지막 화면 14:20 · 창고 끊김 11분"
-    camera('05', 5, '창고', 'storage', 'reconnecting', 11),
-  ] as readonly CameraRow[],
+  cameras: CAMERA_SEEDS.map((seed, index) => cameraRow(seed, index + 1)) as readonly CameraRow[],
   events: [
     event({
       id: 'evt-1432',
@@ -244,6 +274,11 @@ export interface MockServer {
   /** 개발용 — 새 위험 이벤트를 만들어 SSE 로 흘린다 (2d 팝업 확인). */
   emitRiskEvent(input?: Partial<Pick<EventListItem, 'risk' | 'cameraId'>>): EventListItem
   /**
+   * 방금 새 조각이 올라왔다고 알린다 (데모 시나리오).
+   * 시드 시각을 그대로 두면 데모를 오래 켜 둘수록 타일이 '연결됨 · 12분 전'으로 밀린다.
+   */
+  recordSegment(): void
+  /**
    * 가짜 에이전트가 카메라별로 보고할 상태. 가짜 서버의 카메라 상태와 맞춰서
    * 2c 의 '재연결 중 · 끊김' 타일이 개발 모드에서도 보이게 한다.
    */
@@ -261,9 +296,14 @@ const fail = (status: number, error: string, extra: Record<string, unknown> = {}
 // 실제 서버처럼 살짝 늦게 답한다 — 로딩 상태가 화면에 한 번은 보이게.
 const LATENCY_MS = 160
 
-export const createMockServer = (): MockServer => {
+export interface MockServerOptions {
+  /** 주면 데모 부팅으로 시드한다. 평소 미리보기에서는 주지 않는다. */
+  readonly demo?: DemoStoreSeed
+}
+
+export const createMockServer = ({ demo }: MockServerOptions = {}): MockServer => {
   const state = {
-    db: initialDb(),
+    db: initialDb(demo),
     streamStore: null as string | null,
     streamListeners: new Set<(message: ServerStreamMessage) => void>(),
     stateListeners: new Set<(state: StreamConnectionState) => void>(),
@@ -733,6 +773,22 @@ export const createMockServer = (): MockServer => {
     },
 
     emitRiskEvent,
+
+    recordSegment: () => {
+      const at = new Date().toISOString()
+      const isLive = (row: CameraRow): boolean => row.deletedAt === null && row.state === 'connected'
+      state.db = {
+        ...state.db,
+        cameras: state.db.cameras.map((row) =>
+          isLive(row) ? { ...row, lastFrameAt: at, lastSegmentAt: at } : row,
+        ),
+      }
+      state.db.cameras
+        .filter(isLive)
+        .forEach((row) =>
+          emit({ type: 'camera.state', data: { cameraId: row.id, state: row.state, lastFrameAt: at } }),
+        )
+    },
 
     agentCameraState: (agentCameraId) => {
       const camera = state.db.cameras.find((c) => c.agentCameraId === agentCameraId)

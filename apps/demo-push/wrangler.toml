@@ -1,0 +1,24 @@
+name = "scene-stealer-demo-push"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+
+# 구독 보관함. id 는 아래 명령이 찍어 주는 값으로 바꾼다:
+#   npx wrangler kv namespace create SUBS
+#   npx wrangler kv namespace create SUBS --preview
+[[kv_namespaces]]
+binding = "SUBS"
+id = "여기에_KV_NAMESPACE_ID"
+preview_id = "여기에_PREVIEW_ID"
+
+[vars]
+# npm run vapid 가 찍어 주는 공개키. 공개돼도 되는 값이라 커밋해도 된다
+VAPID_PUBLIC_KEY = ""
+# 푸시 서비스가 문제 생겼을 때 연락할 곳. mailto: 또는 https URL
+VAPID_SUBJECT = "mailto:demo@example.com"
+
+# VAPID_PRIVATE_KEY 는 여기 두지 않는다. 시크릿으로만 넣는다:
+#   npx wrangler secret put VAPID_PRIVATE_KEY
+# 로컬 개발(wrangler dev)은 .dev.vars 파일에서 읽는다 (.gitignore 에 들어 있다)
+
+[observability]
+enabled = true

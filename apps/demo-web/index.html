@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>씬스틸러 — 무인매장 이상행동 감시</title>
+    <meta name="description" content="CCTV 영상을 잘라 AI 가 이상 행동을 찾아내고, 사장님 휴대폰으로 알립니다. 브라우저에서 바로 체험해 보세요." />
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="mark">S</span>
+        <div>
+          <h1>씬스틸러</h1>
+          <p>무인매장 CCTV 이상행동 감시</p>
+        </div>
+      </div>
+      <nav>
+        <a href="https://github.com/Piiziy/cctv-agent-electron" target="_blank" rel="noopener">소스 코드</a>
+      </nav>
+    </header>
+
+    <p class="lede">
+      매장 PC 에 설치하는 <strong>수집기</strong>가 CCTV 영상을 짧은 조각으로 잘라 서버로 보내고,
+      AI 가 이상 행동을 찾으면 사장님 <strong>휴대폰</strong>으로 알립니다.
+      아래는 그 과정을 브라우저에서 그대로 돌려 보는 체험판입니다.
+    </p>
+
+    <!-- 휴대폰으로 이 주소를 먼저 연 심사위원에게는 데스크톱 앱 화면 대신 앱을 바로 권한다. -->
+    <section class="handoff" id="handoff" hidden>
+      <h2>휴대폰으로 보고 계시네요</h2>
+      <p>
+        이 화면은 <b>매장 PC 에 설치하는 수집기</b>를 보여 주는 자리라 넓은 화면이 필요합니다.
+        휴대폰에서는 <b>사장님 앱</b>을 바로 열어 보시는 편이 낫습니다.
+      </p>
+      <a class="btn primary" id="open-phone" href="#">사장님 앱 열기</a>
+      <p class="sub">전체 흐름(감시 → 위험 감지 → 알림)을 보시려면 노트북에서 이 주소를 열어 주세요.</p>
+    </section>
+
+    <main class="stage">
+      <section class="pane pc">
+        <div class="pane-head">
+          <h2>매장 PC — 수집기</h2>
+          <span class="tag">실제 앱 화면</span>
+        </div>
+        <div class="frame-wrap">
+          <iframe id="pc" title="매장 PC 수집기" src="./pc/?demo=1"></iframe>
+        </div>
+        <p class="note">
+          실제 제품은 매장 PC 에 설치하는 데스크톱 앱입니다. 카메라와 같은 공유기에 있어야 영상을 받을 수 있어
+          브라우저로는 만들 수 없는 부분이라, 이 체험판에서는 같은 화면을 가짜 카메라로 돌립니다.
+        </p>
+      </section>
+
+      <aside class="panel">
+        <ol class="steps">
+          <li class="step" id="step-phone">
+            <h3><span class="num">1</span> 휴대폰 연결</h3>
+            <p>휴대폰 카메라로 아래 QR 을 찍으면 사장님 앱이 열립니다. 알림을 허용해 주세요.</p>
+            <div class="qr" id="qr" aria-label="휴대폰으로 앱을 여는 QR 코드"></div>
+            <p class="code">연결 코드 <b id="code">------</b></p>
+            <p class="sub" id="phone-status">아직 연결되지 않았습니다.</p>
+          </li>
+
+          <li class="step" id="step-run">
+            <h3><span class="num">2</span> 감시 시작</h3>
+            <p>카메라 5대가 붙고, 30초마다 영상 조각이 잘려 서버로 올라갑니다.</p>
+            <button id="start" class="btn primary">▶ 데모 시작</button>
+            <ul class="log" id="log" aria-live="polite"></ul>
+          </li>
+
+          <li class="step" id="step-alert">
+            <h3><span class="num">3</span> 위험 감지 → 알림</h3>
+            <p>AI 가 한 조각에서 이상 행동을 찾으면 PC 화면에 경고가 뜨고, 같은 순간 휴대폰으로 알림이 갑니다.</p>
+            <button id="risk" class="btn danger" disabled>지금 위험 상황 만들기</button>
+            <p class="sub" id="alert-status"></p>
+          </li>
+        </ol>
+
+        <details class="about">
+          <summary>이 체험판에서 진짜인 것과 아닌 것</summary>
+          <p><b>진짜:</b> 화면, 영상 조각을 나누고 올리는 흐름, 휴대폰 알림, 확인·오탐 처리가 PC 와 휴대폰 양쪽에 함께 반영되는 동기화.</p>
+          <p><b>흉내:</b> "이 구간이 위험하다"는 AI 판정과 서버 응답. 실제 서비스에서는 영상 분석 서버가 맡는 부분입니다.</p>
+        </details>
+      </aside>
+    </main>
+
+    <footer class="foot">
+      <p>실제 제품은 매장 PC용 데스크톱 앱과 사장님용 모바일 앱입니다. 이 페이지는 심사·체험을 위한 웹 버전입니다.</p>
+    </footer>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

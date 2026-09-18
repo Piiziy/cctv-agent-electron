@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ApiProvider } from '../lib/api'
 import { eventIdFrom, pushSupported } from '../lib/notifications'
+import { isWeb, onNotificationOpen } from '../lib/web-push'
 import { SessionProvider, useSession } from '../lib/session'
 import { StoreProvider } from '../lib/store-context'
 
@@ -47,9 +48,18 @@ const useNotificationRouting = () => {
   }, [session])
 }
 
+/** 웹에서의 알림 탭 — 서비스워커가 보낸 메시지든, 주소의 ?event= 든 같은 곳으로 보낸다. */
+const useWebNotificationRouting = () => {
+  useEffect(() => {
+    if (!isWeb) return
+    return onNotificationOpen((eventId) => router.push(`/events/${eventId}`))
+  }, [])
+}
+
 const Gate = () => {
   useAuthGate()
   useNotificationRouting()
+  useWebNotificationRouting()
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" />

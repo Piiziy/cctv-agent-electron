@@ -1,4 +1,13 @@
 import type { AgentApi, SessionSummary } from '../../shared/ipc'
+import {
+  createDemoHook,
+  demoConfig,
+  demoStatus,
+  demoStoreSeed,
+  isDemo,
+  DEMO_SEGMENT_SECONDS,
+  DEMO_SESSION,
+} from './demo'
 import { createMockServer, frame } from './mock-server'
 import {
   DEFAULT_CONFIG,
@@ -11,6 +20,8 @@ import {
 /**
  * Electron 없이 브라우저에서 화면을 보기 위한 가짜 API (`npm run ui`).
  * 제품 동작에는 관여하지 않는다 — window.api 가 있으면 언제나 그쪽이 이긴다.
+ *
+ * 주소에 `?demo=1` 이 붙으면 lib/demo.ts 의 시드로 '이미 감시 중인 매장'에서 시작한다.
  */
 
 const CAMERAS: DiscoveredCamera[] = [
@@ -94,35 +105,42 @@ const persisted = <T>(key: string, fallback: T) => ({
   },
 })
 
-const configStorage = persisted<AgentConfig>('scene-stealer:mock-config', {
-  ...DEFAULT_CONFIG,
-  deviceId: 'agent-mock0001',
-})
-const sessionStorageBox = persisted<SessionSummary>('scene-stealer:mock-session', { signedIn: false })
+/** 데모 탭이 남긴 값이 평소 미리보기 세션에 섞이지 않게 열쇠를 나눈다. */
+const storageKey = (name: string): string => `scene-stealer:${isDemo ? 'demo:' : ''}${name}`
 
-declare global {
-  interface Window {
-    /** 개발용 — 콘솔에서 window.__sceneStealer.emitRiskEvent() 로 2d 팝업을 띄운다. */
-    __sceneStealer?: { emitRiskEvent: ReturnType<typeof createMockServer>['emitRiskEvent'] }
-  }
-}
+const BASE_CONFIG: AgentConfig = { ...DEFAULT_CONFIG, deviceId: 'agent-mock0001' }
+
+const configStorage = persisted<AgentConfig>(
+  storageKey('mock-config'),
+  isDemo ? demoConfig(BASE_CONFIG) : BASE_CONFIG,
+)
+const sessionStorageBox = persisted<SessionSummary>(
+  storageKey('mock-session'),
+  isDemo ? DEMO_SESSION : { signedIn: false },
+)
+
+/** 서브스트림 512kbps 로 찍은 조각 하나의 크기. */
+const SEGMENT_BYTES = (512 * 1000 * DEMO_SEGMENT_SECONDS) / 8
+/** 조각이 만들어지고 서버에 올라가기까지. '대기 N조각'이 올랐다 내려가는 시간이다. */
+const UPLOAD_LATENCY_MS = 900
 
 export const createMockApi = (): AgentApi => {
   const listeners = new Set<(status: AgentStatus) => void>()
-  const server = createMockServer()
-  window.__sceneStealer = { emitRiskEvent: server.emitRiskEvent }
+  const server = createMockServer(isDemo ? { demo: demoStoreSeed } : {})
+
+  const idleStatus: AgentStatus = {
+    running: false,
+    upload: 'idle',
+    cameras: [],
+    bytesUploadedToday: 0,
+    spoolLimitBytesPerCamera: DEFAULT_CONFIG.spoolLimitBytes,
+    lastError: null,
+  }
 
   const store = {
     config: configStorage.read(),
     session: sessionStorageBox.read(),
-    status: {
-      running: false,
-      upload: 'idle',
-      cameras: [],
-      bytesUploadedToday: 0,
-      spoolLimitBytesPerCamera: DEFAULT_CONFIG.spoolLimitBytes,
-      lastError: null,
-    } as AgentStatus,
+    status: isDemo ? demoStatus(server.agentCameraState) : idleStatus,
     timer: null as ReturnType<typeof setInterval> | null,
   }
 
@@ -130,6 +148,44 @@ export const createMockApi = (): AgentApi => {
     store.status = { ...store.status, ...next }
     listeners.forEach((listener) => listener(store.status))
   }
+
+  const uploadSegment = (): number => {
+    const streaming = store.status.cameras.filter((camera) => camera.camera === 'streaming')
+    if (!store.status.running || streaming.length === 0) return 0
+
+    publish({
+      upload: 'uploading',
+      cameras: store.status.cameras.map((camera) =>
+        camera.camera === 'streaming' ? { ...camera, pendingCount: camera.pendingCount + 1 } : camera,
+      ),
+    })
+    setTimeout(() => {
+      const at = new Date().toISOString()
+      publish({
+        upload: 'idle',
+        cameras: store.status.cameras.map((camera) =>
+          camera.camera === 'streaming'
+            ? {
+                ...camera,
+                pendingCount: Math.max(0, camera.pendingCount - 1),
+                uploadedCount: camera.uploadedCount + 1,
+                lastUploadAt: at,
+              }
+            : camera,
+        ),
+        bytesUploadedToday: store.status.bytesUploadedToday + SEGMENT_BYTES * streaming.length,
+      })
+      server.recordSegment()
+    }, UPLOAD_LATENCY_MS)
+
+    return streaming.length
+  }
+
+  const hook = createDemoHook({ server, uploadSegment })
+  window.__sceneStealer = hook
+  // 데모 주소를 그냥 연 심사위원도 숫자가 도는 화면을 봐야 한다. 바깥 데모 페이지가
+  // startScenario() 를 또 불러도 타이머는 하나만 돈다.
+  if (isDemo) hook.startScenario()
 
   return {
     discover: async () => {

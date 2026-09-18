@@ -76,10 +76,18 @@ const localDate = (iso: string): string => {
 export interface MockOptions {
   /** 응답 지연(ms). 로딩 상태를 눈으로 확인하려고 둔다. */
   readonly latencyMs?: number
+  /**
+   * 이벤트 클립으로 보여 줄 영상. 데모 배포는 같이 구운 파일을 가리켜
+   * 바깥 인터넷에 기대지 않는다 — 심사장 네트워크가 막혀도 재생돼야 한다.
+   */
+  readonly clipUrl?: string
 }
 
 export const createMockApi = (options: MockOptions = {}): SceneStealerApi => {
   const latency = options.latencyMs ?? 120
+  const clipUrl =
+    options.clipUrl ??
+    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
   const wait = () => new Promise<void>((r) => setTimeout(r, latency))
 
   const state = {
@@ -102,7 +110,7 @@ export const createMockApi = (options: MockOptions = {}): SceneStealerApi => {
     anomalyThreshold: 0.61,
     memo: item.memo,
     // 실제 서버는 서명 URL 을 준다. 가짜에서는 공개 샘플 영상으로 재생만 확인한다.
-    clipUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    clipUrl,
     clipExpiresAt: at(0, '23:59'),
     segments: [{ videoId: `vid-${item.id}`, startedAt: item.startedAt, playbackUrl: '' }],
     history:

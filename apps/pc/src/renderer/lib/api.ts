@@ -1,4 +1,5 @@
 import type { AgentApi } from '../../shared/ipc'
+import { inertDemoHook } from './demo'
 import { createMockApi } from './mock-api'
 
 declare global {
@@ -14,3 +15,7 @@ declare global {
 export const api: AgentApi = window.api ?? createMockApi()
 
 export const isMock = !window.api
+
+// 진짜 앱에도 데모 훅의 껍데기를 심어 둔다 — 바깥 데모 페이지에서 쓰던 코드가
+// 앱 안에서 돌더라도 window.__sceneStealer 가 없어서 터지는 일은 없어야 한다.
+if (window.api) window.__sceneStealer = inertDemoHook
