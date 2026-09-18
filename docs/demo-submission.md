@@ -21,14 +21,17 @@
 
 ## 제출할 링크
 
-Vercel 에 배포한 주소 하나. 이 한 주소 안에 세 가지가 다 있다.
+Vercel 에 배포한 주소. 이 한 주소 안에 다 있다.
 
 ```
-/        데모 셸 — 진행 안내와 QR
-/pc/     매장 PC 수집기 화면
-/m/      사장님 모바일 앱
+/wanted-test   실서버 시연 — 데모 계정 · 시연 영상 · 실제 서버 AI 판정 (제출용 비공개 주소)
+/              가짜 서버로 도는 데모 (서버 없이도 끝까지 돈다)
+/pc/           매장 PC 수집기 화면
+/m/            사장님 모바일 앱
 ```
- 자세한 구조와 빌드 방법은 [`apps/demo-web/README.md`](../apps/demo-web/README.md).
+
+자세한 구조와 빌드 방법은 [`apps/demo-web/README.md`](../apps/demo-web/README.md),
+실서버 시연이 어떻게 도는지는 [`demo-target-architecture.md`](demo-target-architecture.md).
 
 ## 사장님이 하실 일
 
@@ -59,9 +62,51 @@ Vercel 프로젝트 **Settings → Environment Variables** 에 두 개를 넣는
 | `DEMO_PUSH_ENDPOINT` | `https://<워커주소>.workers.dev` |
 | `DEMO_VAPID_PUBLIC_KEY` | `npm run vapid -w @scene-stealer/demo-push` 가 찍어 주는 공개키 |
 
-### 3. 테스트셋 영상 갈아끼우기 (받는 대로)
+### 3. 실서버 시연(/wanted-test) 켜기
 
-지금은 자리만 채운 무지 영상이 들어 있다.
+백엔드가 배포된 뒤에 한다. 백엔드 쪽 선행 작업(도메인 · HTTPS, CORS 는 PR 에 들어감)은
+[`demo-target-architecture.md`](demo-target-architecture.md) '남은 일' 에 있다.
+
+**① 시연 영상.** `public/demo-video/` 에 넣고 푸시한다. 빌드가 30초 조각으로 자른다
+([`public/demo-video/README.md`](../public/demo-video/README.md)).
+
+**② 도메인.** 백엔드는 같은 최상위 도메인의 https 페이지만 받는다 (CORS, 계약 1.6). 도메인 하나로 둘 다 연다.
+
+| | 예 (`example.com` 자리에 정한 도메인) |
+|---|---|
+| 백엔드 | `https://api.example.com` — HTTPS 인증서 필요. 백엔드 `.env` 에 `CORS_ALLOWED_DOMAIN=example.com` |
+| 웹 데모 | `https://demo.example.com` — Vercel 프로젝트 Settings → Domains 에 추가하고 안내대로 DNS(CNAME) 설정. 인증서는 Vercel 이 발급한다 |
+| 제출 링크 | `https://demo.example.com/wanted-test` |
+
+`*.vercel.app` 주소로 연 `/wanted-test` 는 CORS 에 막혀 "백엔드에 연결할 수 없습니다" 가 뜬다.
+
+**③ 데모 데이터.** 새 Supabase 프로젝트에 스키마를 적용한 뒤
+
+1. Supabase 대시보드 → Authentication → Users → Add user — 이메일·비밀번호, **Auto Confirm** 켬
+2. 그 계정으로 매장을 만든다 (`POST /stores`). 영업시간(`opensAt`·`closesAt`)은 비워 둔다
+3. 그 매장에 PC 를 등록해 기기 토큰을 받는다 (`POST /stores/<매장>/devices`) — 평문은 이때 한 번만 나온다
+
+카메라 등록과 조각 길이(30초) 맞춤은 `/wanted-test` 가 들어올 때마다 알아서 한다.
+
+**④ Vercel 환경변수.** Settings → Environment Variables 에 넣고 다시 배포한다.
+
+| 이름 | 값 |
+|---|---|
+| `LIVE_API_URL` | 백엔드 주소 (**https**, 예 `https://api.example.com`) |
+| `LIVE_SUPABASE_URL` | `https://<프로젝트>.supabase.co` |
+| `LIVE_SUPABASE_ANON_KEY` | Supabase anon 공개키 |
+| `LIVE_EMAIL` · `LIVE_PASSWORD` | ③-1 의 데모 계정 |
+| `LIVE_DEVICE_TOKEN` | ③-3 의 기기 토큰 |
+| `LIVE_STORE_ID` | (선택) 매장이 여럿이면 쓸 매장 id. 비우면 첫 매장 |
+
+> ⚠️ 이 값들은 **번들에 박혀 공개된다.** 주소를 아는 사람은 누구나 데모 계정으로 들어온다.
+> 데모 전용 계정·매장만 쓰고, 다른 데이터가 있는 계정은 절대 넣지 않는다.
+
+빠진 값이 있으면 `/wanted-test` 가 무엇이 빠졌는지 화면에 띄운다. `/` 데모는 영향이 없다.
+
+### 4. `/` 데모의 테스트셋 영상 갈아끼우기 (선택)
+
+`/` 가짜 서버 데모는 자리만 채운 무지 영상을 튼다.
 
 ```bash
 cp <받은영상>.mp4 apps/mobile/public/clips/sample.mp4
@@ -78,7 +123,16 @@ npm run fake-camera -w cctv-agent -- --file <받은영상>.mp4
 
 에이전트 입장에서는 진짜 CCTV 와 구분되지 않는다.
 
-## 심사위원 동선
+## 심사위원 동선 — `/wanted-test`
+
+1. 노트북에서 링크를 연다 → 데모 계정으로 로그인된 매장 PC 화면이 뜨고, 시연 영상이 카메라가 되어 바로 돈다
+2. 오른쪽 아래 QR 을 휴대폰으로 찍는다 → 사장님 앱이 같은 계정으로 열린다 → **알림 받기** 후 페이지를 열어 둔다
+3. 왼쪽 아래 패널에서 30초마다 조각이 서버로 올라가고 AI 분석이 진행되는 것이 보인다
+4. 서버 AI 가 위험으로 판정하면(영상 속 사건 뒤 1~2분) PC 에 경고가 뜨고, 휴대폰 화면에도 뜬다(알림 포함).
+   잠금화면 푸시는 쓰지 않는다 — 휴대폰 화면이 꺼져 있으면 켰을 때 목록에 있다
+5. 휴대폰에서 **확인했어요** → PC 의 경고가 같이 내려간다
+
+## 심사위원 동선 — `/` (가짜 서버)
 
 1. 노트북에서 링크를 연다 → 매장 PC 감시 화면이 그대로 뜬다 (로그인 없음)
 2. QR 을 휴대폰으로 찍는다 → 사장님 앱이 열리고 알림을 허용한다
@@ -93,3 +147,6 @@ npm run fake-camera -w cctv-agent -- --file <받은영상>.mp4
   배포 후 안드로이드 폰에서 `/m/` 을 열고 알림을 허용해 보면 10초 안에 판별된다.
 - **Cloudflare Worker 실제 배포.** 암호화는 RFC 8291 공식 벡터로 검증했지만
   실제 푸시 서비스에 쏴 본 적은 없다.
+- **`/wanted-test` 를 실제 백엔드로.** 계약 모양대로 응답하는 로컬 가짜 서버로는 처음부터 끝까지
+  확인했다(로그인 → 조각 업로드 → 경고 → 폰 확인 → PC 경고 닫힘). 실제 백엔드·Supabase·AI 워커로는
+  배포 전이라 못 돌렸다. 도메인 · HTTPS 와 백엔드 배포가 먼저 필요하다 (CORS 는 백엔드 PR 에 들어갔다).

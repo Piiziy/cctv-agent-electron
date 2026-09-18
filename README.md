@@ -1,12 +1,16 @@
 # 씬스틸러 (Scene Stealer)
 
 무인매장 CCTV 이상행동 감시 서비스의 **클라이언트 모노레포**. npm workspaces + Turborepo.
-백엔드는 [scene-stealer-back](https://github.com/yimsNEO/scene-stealer-back) 이다.
+백엔드는 [scene-stealer-back](https://github.com/SceneStealer1/scene-stealer-back) 이다.
 
 ## 지금 무엇을 하고 있나
 
 대회 제출용 **웹 데모**를 만들고 있다. 규정상 APK·exe 를 직접 내려받게 할 수 없고
 스토어 출시도 기간 안에 불가능해서, "핵심 기능을 웹에서 체험할 수 있는 데모" 를 URL 로 낸다.
+
+제출 주소는 비공개 경로 **`/wanted-test`** 다 — 데모 계정으로 자동 로그인하고, `public/demo-video` 의
+시연 영상을 CCTV 대신 물려 **실제 서버**로 조각을 올리고, 서버 AI 판정으로만 경고·알림이 간다.
+프론트는 끝났고 백엔드는 CORS 까지 PR 에 들어갔다. 도메인 · HTTPS 와 백엔드 배포가 남았다.
 
 **이 두 문서부터 읽으면 된다.**
 
@@ -26,11 +30,12 @@
 | `packages/api` | 백엔드 API 타입과 클라이언트, 그리고 가짜 서버 |
 | `packages/tokens` | 피그마에서 뽑은 디자인 토큰 (PC·모바일 공용) |
 | [`docs/api-contract.md`](docs/api-contract.md) | 백엔드 API 계약 (백엔드 레포와 같은 사본) |
+| `public/demo-video/` | `/wanted-test` 에서 CCTV 대신 쓰는 시연 영상 (빌드가 30초 조각으로 자른다) |
 | `design/` | 디자인 원본 (`.dc.html` 인라인 스타일이 정확한 값) |
 | `handoff/` | 디자인 넘겨받을 때 받은 요구사항·프롬프트 |
 
-> ⚠️ **지금 화면에 보이는 데이터는 전부 가짜다.** PC 앱도 모바일 앱도 브라우저 안의
-> 가짜 서버를 본다. 배포된 백엔드는 아직 없다 — 자세한 건 위 목표 구조 문서에 있다.
+> ⚠️ **`/` 데모의 데이터는 전부 가짜다.** PC 앱도 모바일 앱도 브라우저 안의 가짜 서버를 본다.
+> `/wanted-test` 만 실제 서버를 보는데, 배포된 백엔드는 아직 없다 — 자세한 건 위 목표 구조 문서에 있다.
 
 ## 시작
 

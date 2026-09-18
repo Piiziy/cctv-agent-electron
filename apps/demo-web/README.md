@@ -3,15 +3,33 @@
 대회 규정상 APK·exe 를 직접 내려받게 할 수 없고, 스토어 출시도 기간 안에 불가능하다.
 그래서 규정이 허용하는 길인 **"핵심 기능을 웹에서 체험할 수 있는 데모"** 를 만든다.
 
-이 페이지 하나가 세 덩어리를 합쳐 놓은 것이다.
+이 페이지 하나가 여러 덩어리를 합쳐 놓은 것이다.
 
 ```
-dist/            이 데모 셸
-dist/pc/         매장 PC 수집기 화면  ← apps/pc 렌더러를 브라우저용으로 빌드
-dist/m/          사장님 모바일 앱     ← apps/mobile 의 Expo 웹 빌드
+dist/              가짜 서버 데모 셸 (/)
+dist/wanted-test/  실서버 시연 셸 (/wanted-test) — 대회 제출용 비공개 주소
+dist/pc/           매장 PC 수집기 화면  ← apps/pc 렌더러를 브라우저용으로 빌드
+dist/m/            사장님 모바일 앱     ← apps/mobile 의 Expo 웹 빌드
+dist/demo-video/   시연 영상 + 30초 조각 ← 레포루트/public/demo-video 원본을 빌드가 자른다
 ```
 
-셋이 같은 출처에 올라가야 셸이 iframe 안의 PC 앱을 직접 조종할 수 있다.
+같은 출처에 올라가야 셸이 iframe 안의 PC 앱을 직접 조종할 수 있다.
+
+## 실서버 시연 (/wanted-test)
+
+셸이 PC 앱을 `?live=1` 로 연다. 그러면 PC 앱이 데모 계정으로 **실제 백엔드**에 로그인하고,
+`public/demo-video` 의 영상을 카메라 삼아 30초 조각을 `POST /v1/segments` 로 올린다. 경고는 서버 AI 가
+판정한 것만 뜬다. 휴대폰 QR 은 `/m/?live=1` — 같은 데모 계정으로 열린다.
+
+설정은 `LIVE_*` 환경변수다 (아래 표). 백엔드 CORS 는 같은 최상위 도메인의 https 페이지만 받으므로,
+웹 데모도 그 도메인의 하위 주소(Vercel 사용자 지정 도메인)로 열어야 한다 — `*.vercel.app` 에서는 막힌다.
+흐름·남은 작업은 [`docs/demo-target-architecture.md`](../../docs/demo-target-architecture.md).
+
+```bash
+node scripts/demo-video.mjs                       # 영상만 미리 잘라 보기 → .generated/demo-video/
+npm run build -w @scene-stealer/demo-web          # 전체 굽기
+npm run preview -w @scene-stealer/demo-web        # 구운 것 띄우기 → http://localhost:4173/wanted-test/
+```
 
 ## 심사위원 동선
 
@@ -42,6 +60,11 @@ npm run build -w @scene-stealer/demo-web
 | `DEMO_PUSH_ENDPOINT` | 휴대폰이 **페이지를 열어 둔 동안에만** 알림을 받는다 |
 | `DEMO_VAPID_PUBLIC_KEY` | 위와 같음 |
 | `DEMO_CLIP_URL` | 같이 구운 `m/clips/sample.mp4` 를 쓴다 |
+| `LIVE_API_URL` · `LIVE_SUPABASE_URL` · `LIVE_SUPABASE_ANON_KEY` · `LIVE_EMAIL` · `LIVE_PASSWORD` · `LIVE_DEVICE_TOKEN` | `/wanted-test` 가 빠진 이름을 화면에 띄운다. `/` 는 영향 없음 |
+| `LIVE_STORE_ID` | 데모 계정의 첫 매장 |
+| `DEMO_VIDEO_HEIGHT` · `DEMO_VIDEO_FPS` · `DEMO_SEGMENT_SECONDS` | 480 · 15 · 30 |
+
+`LIVE_*` 는 번들에 박혀 공개된다. 데모 전용 계정·매장·기기 토큰만 넣는다.
 
 ## 배포 — Vercel
 
@@ -61,6 +84,7 @@ Root Directory 를 `apps/pc` 같은 하위 폴더로 잡으면 안 된다 — PC
 
 `vercel.json` 의 rewrite 는 모바일 앱이 SPA 라서 있다. `/m/` 아래 경로는 실제 파일이
 없으면 `index.html` 로 넘겨야 라우터가 받는다 (실제 파일이 있으면 그게 먼저 나간다).
+`/wanted-test` (끝에 `/` 없이) 도 같은 식으로 `wanted-test/index.html` 로 넘긴다.
 
 ### GitHub Pages 로 가야 한다면
 

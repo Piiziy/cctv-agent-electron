@@ -79,7 +79,7 @@ npm run dist
 
 ## 백엔드 API 규격
 
-백엔드는 [scene-stealer-back](https://github.com/yimsNEO/scene-stealer-back) 이다. 화면이 쓰는
+백엔드는 [scene-stealer-back](https://github.com/SceneStealer1/scene-stealer-back) 이다. 화면이 쓰는
 API 전체는 [`docs/api-contract.md`](../../docs/api-contract.md) (백엔드 레포와 같은 사본). 아래는
 그중 에이전트가 영상을 올리는 부분이다.
 
