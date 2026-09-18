@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "ui"],
       "port": 5174
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web", "-w", "scene-stealer-mobile", "--", "--port", "8082"],
+      "port": 8082
     }
   ]
 }
