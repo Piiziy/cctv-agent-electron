@@ -3,15 +3,34 @@
 무인매장 CCTV 이상행동 감시 서비스의 **클라이언트 모노레포**. npm workspaces + Turborepo.
 백엔드는 [scene-stealer-back](https://github.com/yimsNEO/scene-stealer-back) 이다.
 
+## 지금 무엇을 하고 있나
+
+대회 제출용 **웹 데모**를 만들고 있다. 규정상 APK·exe 를 직접 내려받게 할 수 없고
+스토어 출시도 기간 안에 불가능해서, "핵심 기능을 웹에서 체험할 수 있는 데모" 를 URL 로 낸다.
+
+**이 두 문서부터 읽으면 된다.**
+
+| | |
+|---|---|
+| [`docs/demo-target-architecture.md`](docs/demo-target-architecture.md) | **가야 할 곳** — 목표 흐름, 지금과의 차이, 남은 일, 미해결 문제 |
+| [`docs/demo-submission.md`](docs/demo-submission.md) | 제출 절차와 사람이 해야 하는 일 |
+
 ## 구성
 
 | 경로 | 무엇 |
 |---|---|
 | [`apps/pc`](apps/pc/README.md) | 매장 PC 앱 `cctv-agent` (Electron) — 카메라 영상 수집·업로드, 사장님 화면 |
-| `packages/*` | 앱끼리 나눠 쓰는 코드 (아직 없음) |
+| [`apps/mobile`](apps/mobile/README.md) | 사장님 모바일 앱 (Expo) — 매장 밖에서 받는 위험 알림 |
+| [`apps/demo-web`](apps/demo-web/README.md) | 심사위원용 웹 데모. 위 둘을 한 주소에 합쳐 올린다 |
+| [`apps/demo-push`](apps/demo-push/README.md) | 웹 푸시 발송 (Cloudflare Worker). 데모의 알림만 담당 |
+| `packages/api` | 백엔드 API 타입과 클라이언트, 그리고 가짜 서버 |
+| `packages/tokens` | 피그마에서 뽑은 디자인 토큰 (PC·모바일 공용) |
 | [`docs/api-contract.md`](docs/api-contract.md) | 백엔드 API 계약 (백엔드 레포와 같은 사본) |
 | `design/` | 디자인 원본 (`.dc.html` 인라인 스타일이 정확한 값) |
 | `handoff/` | 디자인 넘겨받을 때 받은 요구사항·프롬프트 |
+
+> ⚠️ **지금 화면에 보이는 데이터는 전부 가짜다.** PC 앱도 모바일 앱도 브라우저 안의
+> 가짜 서버를 본다. 배포된 백엔드는 아직 없다 — 자세한 건 위 목표 구조 문서에 있다.
 
 ## 시작
 
@@ -33,8 +52,10 @@ npm install
 | `npm run test:e2e` | E2E (캐시 안 함) |
 | `npm run dev` | PC 앱 개발 모드 |
 | `npm run ui` | PC 앱 화면만 브라우저로 (`localhost:5174`, 가짜 API) |
-| `npm run fake-camera` | 가짜 CCTV 카메라 |
+| `npm run fake-camera` | 가짜 CCTV 카메라. `-- --file <영상>` 으로 가진 영상을 물린다 |
 | `npm run dist` | PC 앱 설치 파일 |
+| `npm run build -w @scene-stealer/demo-web` | 웹 데모 전체 굽기 (`apps/demo-web/dist`) |
+| `npm run start -w scene-stealer-mobile` | 모바일 앱 개발 서버 (QR) |
 
 `dev`·`ui`·`fake-camera`·`dist` 는 `npm run <명령> -w cctv-agent` 로 PC 앱에 넘긴다. 인자는
 `--` 뒤에 붙인다 (예: `npm run dev -- --remoteDebuggingPort 9339`). 한 워크스페이스만 Turborepo 로
