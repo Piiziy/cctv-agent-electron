@@ -3,14 +3,47 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors, radius, spacing, type as type_ } from '@scene-stealer/tokens'
 import { Button, Caption } from '../components/ui'
-import { usingMockAuth } from '../lib/config'
+import { config, usingMockAuth } from '../lib/config'
 import { useSession } from '../lib/session'
 
 /**
  * 로그인 — 휴대폰 번호 + 인증번호. PC 앱과 같은 계정이다.
  * 뼈대에 모바일 로그인 화면이 없어 PC 2a 의 순서(번호 → 코드)를 그대로 따랐다.
  */
+/**
+ * 실서버 시연에서는 로그인 화면이 없다 — 데모 계정으로 들어가지 못했을 때만 여기로 온다.
+ * 휴대폰 인증 칸을 보여 봐야 심사위원은 쓸 번호가 없다. 이유와 다시 시도만 둔다.
+ */
+const LiveSignInProblem = () => {
+  const { liveError, accessToken } = useSession()
+  const [busy, setBusy] = useState(false)
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.content}>
+        <View style={styles.brandBlock}>
+          <Text style={styles.brand}>Scene Stealer</Text>
+          <Text style={styles.lede}>실서버 시연용 데모 계정으로 들어가는 중입니다.</Text>
+        </View>
+        {liveError ? <Caption tone="danger">{liveError}</Caption> : null}
+        <Button
+          label="다시 시도"
+          tone="primary"
+          loading={busy}
+          onPress={() => {
+            setBusy(true)
+            void accessToken().finally(() => setBusy(false))
+          }}
+        />
+      </View>
+    </SafeAreaView>
+  )
+}
+
 export default function LoginScreen() {
+  return config.live ? <LiveSignInProblem /> : <PhoneLogin />
+}
+
+function PhoneLogin() {
   const { auth, signIn } = useSession()
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')

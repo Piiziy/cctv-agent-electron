@@ -4,6 +4,7 @@
   "outputDirectory": "apps/demo-web/dist",
   "framework": null,
   "rewrites": [
+    { "source": "/wanted-test", "destination": "/wanted-test/index.html" },
     { "source": "/m/(.*)", "destination": "/m/index.html" }
   ]
 }

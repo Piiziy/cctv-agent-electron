@@ -44,8 +44,41 @@ const urlBase64ToUint8Array = (value: string): Uint8Array<ArrayBuffer> => {
 export type WebPushState =
   | { readonly kind: 'unsupported'; readonly reason: string }
   | { readonly kind: 'denied' }
+  /** 잠금화면까지 온다 (가짜 데모의 푸시 Worker). code 는 페어링 코드. */
   | { readonly kind: 'push'; readonly code: string }
+  /** 페이지를 열어 둔 동안만. */
   | { readonly kind: 'local' }
+
+/** 아이폰 사파리는 홈 화면에 추가한 웹앱에서만 알림·푸시를 쓸 수 있다. */
+export const needsHomeScreenInstall = (): boolean => {
+  if (!isWeb || typeof navigator === 'undefined') return false
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  const standalone =
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    globalThis.matchMedia?.('(display-mode: standalone)').matches === true
+  return ios && !standalone
+}
+
+/**
+ * 홈 화면에 추가할 때 쓰는 웹앱 정보(manifest)를 건다. 실서버 시연이면 시작 주소가 `?live=1` 인
+ * 쪽을 건다 — 아이폰의 홈 화면 앱은 사파리와 저장소를 나눠 쓰지 않아서, 주소에 표시가 없으면
+ * 실서버 시연인지 알 길이 없다.
+ */
+export const installWebAppManifest = (): void => {
+  if (!isWeb || typeof document === 'undefined' || document.querySelector('link[rel="manifest"]')) return
+  const add = (tag: 'link' | 'meta', attrs: Record<string, string>): void => {
+    const el = document.createElement(tag)
+    Object.entries(attrs).forEach(([name, value]) => el.setAttribute(name, value))
+    document.head.appendChild(el)
+  }
+  add('link', {
+    rel: 'manifest',
+    href: `${config.webBaseUrl}/${config.live ? 'manifest-live.webmanifest' : 'manifest.webmanifest'}`,
+  })
+  add('link', { rel: 'apple-touch-icon', href: `${config.webBaseUrl}/icon.png` })
+  add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' })
+  add('meta', { name: 'apple-mobile-web-app-title', content: '씬스틸러' })
+}
 
 /**
  * 페어링 코드 6자리. 서버가 [A-Z0-9]{6} 만 받는데
@@ -90,10 +123,18 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
 /**
  * 알림을 받을 준비를 한다. 권한을 묻고, 가능하면 푸시 구독까지 서버에 등록한다.
  * 반환값으로 어느 경로를 타게 됐는지 알려 준다 — 화면이 그대로 안내 문구를 띄운다.
+ *
+ * 실서버 시연은 잠금화면 푸시를 쓰지 않는다 (2026-09-18 결정). 권한만 받아 두고,
+ * 페이지가 열려 있는 동안 새 경고를 찾으면 그 자리에서 알림을 띄운다 (홈 화면의 새로고침).
  */
 export const enableWebNotifications = async (): Promise<WebPushState> => {
   if (!notificationSupported()) {
-    return { kind: 'unsupported', reason: '이 브라우저는 알림을 지원하지 않습니다' }
+    return {
+      kind: 'unsupported',
+      reason: needsHomeScreenInstall()
+        ? "아이폰은 사파리 공유 버튼 → '홈 화면에 추가' 한 앱에서만 알림을 띄울 수 있습니다"
+        : '이 브라우저는 알림을 지원하지 않습니다',
+    }
   }
 
   const permission = Notification.permission === 'granted'
@@ -102,7 +143,8 @@ export const enableWebNotifications = async (): Promise<WebPushState> => {
   if (permission !== 'granted') return { kind: 'denied' }
 
   const registration = await registerServiceWorker()
-  const canPush = registration && config.pushEndpoint && config.vapidPublicKey
+  // 가짜 데모의 푸시 Worker 는 실서버 시연과 섞지 않는다 — 거기로 가는 알림은 지어낸 것이다.
+  const canPush = !config.live && registration && config.pushEndpoint && config.vapidPublicKey
   if (!canPush) return { kind: 'local' }
 
   try {

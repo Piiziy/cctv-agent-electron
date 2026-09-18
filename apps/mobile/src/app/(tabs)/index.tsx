@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
@@ -8,8 +8,10 @@ import { Caption, Card, Chip, EmptyState, Heading } from '../../components/ui'
 import { EventRow } from '../../components/EventRow'
 import { DemoNotice } from '../../components/DemoNotice'
 import { useApi } from '../../lib/api'
-import { cameraStateLabel, elapsedLabel, localDate, timeOf } from '../../lib/format'
+import { config } from '../../lib/config'
+import { cameraStateLabel, elapsedLabel, EVENT_NAME, localDate, riskLabel, timeOf } from '../../lib/format'
 import { useStores } from '../../lib/store-context'
+import { showLocalNotification } from '../../lib/web-push'
 
 /**
  * 2k 홈.
@@ -21,10 +23,33 @@ export default function HomeScreen() {
   const [monitoring, setMonitoring] = useState<Monitoring | null>(null)
   const [events, setEvents] = useState<readonly EventListItem[]>([])
   const [busy, setBusy] = useState(false)
+  /** 이미 본 경고. 처음 읽은 목록은 본 것으로 친다 — 들어오자마자 옛 경고로 알림이 울리면 안 된다. */
+  const seen = useRef<Set<string> | null>(null)
 
-  const load = useCallback(async () => {
+  /**
+   * 실서버 시연은 잠금화면 푸시를 쓰지 않는다. 대신 이 페이지가 열려 있는 동안 새로 생긴
+   * 미확인 경고를 휴대폰 알림으로 띄운다 (알림을 허용했을 때만 — showLocalNotification 이 확인한다).
+   */
+  const notifyNew = useCallback((items: readonly EventListItem[]) => {
+    if (seen.current === null) {
+      seen.current = new Set(items.map((item) => item.id))
+      return
+    }
+    for (const item of items) {
+      if (seen.current.has(item.id)) continue
+      seen.current.add(item.id)
+      if (item.state !== 'unconfirmed') continue
+      void showLocalNotification(
+        `${selected?.name ?? '매장'} · ${item.cameraName ?? '카메라'}`,
+        `${EVENT_NAME}이 감지되었습니다 · 위험도 ${riskLabel[item.risk]}`,
+        item.id,
+      )
+    }
+  }, [selected?.name])
+
+  const load = useCallback(async (options: { silent?: boolean } = {}) => {
     if (!selected) return
-    setBusy(true)
+    if (!options.silent) setBusy(true)
     try {
       const [status, page] = await Promise.all([
         api.getMonitoring(selected.id),
@@ -32,12 +57,28 @@ export default function HomeScreen() {
       ])
       setMonitoring(status)
       setEvents(page.items)
+      if (config.live) notifyNew(page.items)
+    } catch {
+      // 조용한 새로고침이 실패해도 지금 화면은 그대로 둔다. 당겨서 새로고침하면 다시 묻는다.
     } finally {
-      setBusy(false)
+      if (!options.silent) setBusy(false)
     }
-  }, [api, selected])
+  }, [api, selected, notifyNew])
 
   useFocusEffect(useCallback(() => { void load() }, [load]))
+
+  // 매장을 바꾸면 그 매장의 목록을 처음부터 본 것으로 친다.
+  useEffect(() => {
+    seen.current = null
+  }, [selected?.id])
+
+  // 실서버 시연 — 서버 AI 판정은 몇십 초 간격으로 온다. 페이지가 열려 있는 동안 조용히 다시 읽는다.
+  // 다른 앱으로 잠깐 가 있어도 돌게 둔다 — 그때 오는 경고가 알림의 쓸모다 (화면이 꺼지면 브라우저가 멈춘다).
+  useEffect(() => {
+    if (!config.live) return
+    const timer = setInterval(() => void load({ silent: true }), 10_000)
+    return () => clearInterval(timer)
+  }, [load])
 
   const broken = monitoring?.cameras.filter((c) => c.state !== 'connected') ?? []
   const unconfirmed = events.filter((e) => e.state === 'unconfirmed').length

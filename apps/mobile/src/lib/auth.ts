@@ -59,6 +59,54 @@ export const createSupabaseAuth = (url: string, anonKey: string): AuthBackend =>
   }
 }
 
+/** 데모 계정에는 휴대폰 번호가 없다. 화면에 번호 대신 이 이름이 보인다. */
+export const LIVE_ACCOUNT_LABEL = '데모 계정'
+
+/**
+ * 실서버 시연(/wanted-test)의 데모 계정 로그인 — 이메일·비밀번호.
+ * 사장님 앱의 로그인은 휴대폰 인증뿐이고, 이 길은 체험판 전용이다.
+ */
+export const signInWithPassword = async (
+  url: string,
+  anonKey: string,
+  email: string,
+  password: string,
+): Promise<Session> => {
+  const response = await fetch(`${url.replace(/\/+$/, '')}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', apikey: anonKey },
+    body: JSON.stringify({ email, password }),
+  })
+  const json = (await response.json().catch(() => null)) as {
+    access_token?: string
+    refresh_token?: string
+    expires_in?: number
+    expires_at?: number
+    user?: { id?: string }
+    msg?: string
+    error_description?: string
+  } | null
+  if (!response.ok || !json?.access_token) {
+    throw new Error(
+      response.status === 400
+        ? '데모 계정으로 로그인하지 못했습니다. 계정 설정(이메일·비밀번호)을 확인해 주세요.'
+        : (json?.msg ?? json?.error_description ?? `로그인 실패 (HTTP ${response.status})`),
+    )
+  }
+  const expiresAt = json.expires_at
+    ? json.expires_at * 1000
+    : json.expires_in
+      ? Date.now() + json.expires_in * 1000
+      : null
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token ?? null,
+    expiresAt,
+    userId: json.user?.id ?? null,
+    phone: LIVE_ACCOUNT_LABEL,
+  }
+}
+
 /** 코드 6자리면 통과. 서버 없이 화면을 끝까지 볼 수 있게 한다. */
 export const createMockAuth = (): AuthBackend => ({
   kind: 'mock',

@@ -2,16 +2,21 @@
 /**
  * 심사위원용 웹 데모 한 덩어리로 굽기.
  *
- *   dist/            데모 셸 (이 페이지)
- *   dist/pc/         매장 PC 수집기 화면 — apps/pc 의 렌더러를 브라우저용으로 빌드
- *   dist/m/          사장님 모바일 앱 — apps/mobile 의 Expo 웹 빌드
+ *   dist/              데모 셸 — 가짜 서버로 도는 데모
+ *   dist/wanted-test/  실서버 시연 셸 — 대회 제출용 비공개 주소
+ *   dist/pc/           매장 PC 수집기 화면 — apps/pc 의 렌더러를 브라우저용으로 빌드
+ *   dist/m/            사장님 모바일 앱 — apps/mobile 의 Expo 웹 빌드
+ *   dist/demo-video/   시연 영상과 30초 조각 — 레포루트/public/demo-video 원본으로 만든다
  *
- * 셋이 같은 출처에 올라가야 데모 셸이 iframe 안의 PC 앱을 직접 만질 수 있다.
+ * 넷이 같은 출처에 올라가야 데모 셸이 iframe 안의 PC 앱을 직접 만질 수 있다.
+ * PC·모바일 앱은 한 벌이고, `?live=1` 로 열렸을 때만 실서버 설정(LIVE_*)을 쓴다.
  */
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildDemoVideos } from './demo-video.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const demoWeb = resolve(here, '..')
@@ -26,32 +31,63 @@ const base = process.env.DEMO_BASE ?? '/'
 const pushEndpoint = process.env.DEMO_PUSH_ENDPOINT ?? ''
 const vapidKey = process.env.DEMO_VAPID_PUBLIC_KEY ?? ''
 
-const run = (command, args, options = {}) => {
-  console.log(`\n$ ${command} ${args.join(' ')}`)
-  execFileSync(command, args, { stdio: 'inherit', cwd: repo, ...options })
+/**
+ * 실서버 시연(/wanted-test) 설정. Vercel 프로젝트 환경변수로 넣는다 (docs/demo-submission.md).
+ * 없어도 빌드는 된다 — /wanted-test 가 무엇이 빠졌는지 화면에 알린다. `/` 데모는 영향이 없다.
+ * 전부 번들에 박혀 공개되는 값이다. 데모 전용 계정·매장·기기 토큰만 넣는다.
+ */
+const LIVE_KEYS = [
+  'LIVE_API_URL',
+  'LIVE_SUPABASE_URL',
+  'LIVE_SUPABASE_ANON_KEY',
+  'LIVE_EMAIL',
+  'LIVE_PASSWORD',
+  'LIVE_DEVICE_TOKEN',
+  'LIVE_STORE_ID',
+]
+const live = Object.fromEntries(LIVE_KEYS.map((key) => [key, (process.env[key] ?? '').trim()]))
+/** 앱마다 번들러가 받아 주는 접두사가 다르다 (Vite: VITE_, Expo: EXPO_PUBLIC_). */
+const liveEnv = (prefix, keys = LIVE_KEYS) => Object.fromEntries(keys.map((key) => [`${prefix}${key}`, live[key]]))
+
+/**
+ * 워크스페이스에서 보이는 패키지의 CLI 를 node 로 직접 부른다.
+ * `npx` 는 윈도에서 npx.cmd 라 execFile 로 부를 수 없다 (셸을 거치면 공백 든 경로가 깨진다).
+ */
+const runBin = (cwd, pkg, args, options = {}) => {
+  const manifestPath = createRequire(resolve(cwd, 'package.json')).resolve(`${pkg}/package.json`)
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const entry = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.[pkg]
+  if (!entry) throw new Error(`${pkg} 의 실행 파일을 찾지 못했습니다`)
+  console.log(`\n$ ${pkg} ${args.join(' ')}`)
+  execFileSync(process.execPath, [resolve(dirname(manifestPath), entry), ...args], { stdio: 'inherit', cwd, ...options })
 }
 
 console.log(`베이스 경로: ${base}`)
 console.log(`푸시 엔드포인트: ${pushEndpoint || '(없음 — 휴대폰은 로컬 알림으로 동작)'}`)
+// 값은 찍지 않는다 — 빌드 로그는 공유되는 경우가 많다.
+const missingLive = LIVE_KEYS.filter((key) => key !== 'LIVE_STORE_ID' && !live[key])
+console.log(`실서버 시연 설정: ${missingLive.length === 0 ? '있음' : `빠짐 → ${missingLive.join(', ')}`}`)
 
 rmSync(dist, { recursive: true, force: true })
 mkdirSync(dist, { recursive: true })
 
+// 0. 시연 영상을 30초 조각으로. 셸 빌드(3)가 .generated/ 를 dist 로 복사한다.
+buildDemoVideos()
+
 // 1. 매장 PC 화면.
 // apps/pc 안에서 돌린다 — tailwind.config.js 의 content 경로가 상대경로라
 // 레포 루트에서 돌리면 클래스를 하나도 못 찾고 `bg-page` 가 없다며 죽는다.
-run('npx', [
-  'vite', 'build',
+runBin(resolve(repo, 'apps/pc'), 'vite', [
+  'build',
   '--config', 'vite.ui.config.ts',
   '--base', `${base}pc/`,
   '--outDir', resolve(dist, 'pc'),
   '--emptyOutDir',
-], { cwd: resolve(repo, 'apps/pc') })
+], { env: { ...process.env, ...liveEnv('VITE_') } })
 
 // 2. 모바일 앱. Expo 는 출력 경로를 인자로 받고, 베이스 경로는 app.json 의 experiments.baseUrl 이 정한다.
 const mobileOut = resolve(dist, 'm')
-run('npx', ['expo', 'export', '-p', 'web', '--output-dir', mobileOut], {
-  cwd: resolve(repo, 'apps/mobile'),
+runBin(resolve(repo, 'apps/mobile'), 'expo', ['export', '-p', 'web', '--output-dir', mobileOut], {
   env: {
     ...process.env,
     EXPO_PUBLIC_DEMO: '1',
@@ -62,8 +98,14 @@ run('npx', ['expo', 'export', '-p', 'web', '--output-dir', mobileOut], {
     EXPO_PUBLIC_WEB_BASE_URL: `${base}m`.replace(/\/+$/, ''),
     // 같이 구운 영상을 가리킨다. 테스트셋이 들어오면 apps/mobile/public/clips/ 의 파일만 갈아끼우면 된다.
     EXPO_PUBLIC_CLIP_URL: process.env.DEMO_CLIP_URL ?? `${base}m/clips/sample.mp4`,
+    // 실서버 시연. 모바일은 업로드를 하지 않으므로 기기 토큰은 넘기지 않는다.
+    ...liveEnv('EXPO_PUBLIC_', ['LIVE_API_URL', 'LIVE_SUPABASE_URL', 'LIVE_SUPABASE_ANON_KEY', 'LIVE_EMAIL', 'LIVE_PASSWORD', 'LIVE_STORE_ID']),
   },
 })
+
+// 홈 화면에 추가할 때 쓰는 아이콘. 아이폰은 홈 화면에 추가한 웹앱만 웹 푸시를 받는다 (manifest 는 public/ 에 있다).
+const mobileIcon = resolve(repo, 'apps/mobile/assets/images/icon.png')
+if (existsSync(mobileIcon) && !existsSync(resolve(mobileOut, 'icon.png'))) cpSync(mobileIcon, resolve(mobileOut, 'icon.png'))
 
 // 라우터가 브라우저에서 도는 SPA 다. 정적 호스팅은 /m/events/ev-1 을 모르니 404 도 같은 문서를 주게 한다.
 const mobileIndex = resolve(mobileOut, 'index.html')
@@ -74,8 +116,7 @@ const clipsSrc = resolve(repo, 'apps/mobile/public/clips')
 if (existsSync(clipsSrc)) cpSync(clipsSrc, resolve(dist, 'clips'), { recursive: true })
 
 // 3. 데모 셸.
-run('npx', ['vite', 'build'], {
-  cwd: demoWeb,
+runBin(demoWeb, 'vite', ['build'], {
   env: { ...process.env, DEMO_BASE: base, VITE_PUSH_ENDPOINT: pushEndpoint },
 })
 
@@ -89,6 +130,8 @@ if (existsSync(shellIndex)) cpSync(shellIndex, resolve(dist, '404.html'))
 
 const size = (path) => (existsSync(path) ? `${(readFileSync(path).length / 1024).toFixed(0)}KB` : '없음')
 console.log(`\n완료 → ${dist}`)
-console.log(`  index.html  ${size(shellIndex)}`)
-console.log(`  pc/index.html  ${size(resolve(dist, 'pc/index.html'))}`)
-console.log(`  m/index.html   ${size(mobileIndex)}`)
+console.log(`  index.html              ${size(shellIndex)}`)
+console.log(`  wanted-test/index.html  ${size(resolve(dist, 'wanted-test/index.html'))}`)
+console.log(`  pc/index.html           ${size(resolve(dist, 'pc/index.html'))}`)
+console.log(`  m/index.html            ${size(mobileIndex)}`)
+console.log(`  demo-video/manifest.json ${size(resolve(dist, 'demo-video/manifest.json'))}`)

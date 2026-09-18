@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Store } from '@scene-stealer/api'
 import { useApi } from './api'
+import { config } from './config'
 import { useSession } from './session'
 
 interface StoreContextValue {
@@ -27,7 +28,9 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     try {
       const next = await api.listStores()
       setStores(next)
-      setSelectedId((current) => current ?? next[0]?.id ?? null)
+      // 실서버 시연은 노트북의 PC 화면과 같은 매장을 봐야 한다.
+      const preferred = config.live && next.some((store) => store.id === config.liveStoreId) ? config.liveStoreId : null
+      setSelectedId((current) => current ?? preferred ?? next[0]?.id ?? null)
     } finally {
       setLoading(false)
     }

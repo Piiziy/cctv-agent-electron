@@ -7,7 +7,8 @@
 
 export type Risk = 'high' | 'medium' | 'low'
 export type EventState = 'unconfirmed' | 'confirmed' | 'false_positive'
-export type CameraState = 'connected' | 'reconnecting' | 'disconnected' | 'auth_failed'
+/** 'unknown' = 아직 보고가 없거나 PC 가 감시를 멈춘 카메라 (에이전트가 일시 중지를 이렇게 보낸다). */
+export type CameraState = 'unknown' | 'connected' | 'reconnecting' | 'disconnected' | 'auth_failed'
 export type ChangeSource = 'pc' | 'mobile' | 'system'
 
 export interface Device {

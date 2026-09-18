@@ -40,6 +40,24 @@ declare const __SCENE_STEALER_BUILD_DEFAULTS__:
     }
   | undefined
 
+/**
+ * 웹 데모 빌드(apps/demo-web/scripts/build-all.mjs)가 넣는 값. 실서버 데모(/wanted-test)만 쓴다.
+ * Electron 빌드와 `npm run ui` 에서는 비어 있다.
+ */
+interface ImportMetaEnv {
+  readonly VITE_LIVE_API_URL?: string
+  readonly VITE_LIVE_SUPABASE_URL?: string
+  readonly VITE_LIVE_SUPABASE_ANON_KEY?: string
+  readonly VITE_LIVE_EMAIL?: string
+  readonly VITE_LIVE_PASSWORD?: string
+  readonly VITE_LIVE_DEVICE_TOKEN?: string
+  readonly VITE_LIVE_STORE_ID?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+
 /** Vite 가 정적 자산을 번들하고 URL 문자열을 돌려준다. */
 declare module '*.svg' {
   const url: string

@@ -10,6 +10,8 @@ export const stateLabel: Record<EventState, string> = {
   false_positive: '오탐',
 }
 export const cameraStateLabel: Record<CameraState, string> = {
+  // PC 가 감시를 멈췄거나 아직 보고가 없다. PC 화면의 타일도 '중지'로 보인다.
+  unknown: '중지',
   connected: '연결됨',
   reconnecting: '재연결 중',
   disconnected: '끊김',

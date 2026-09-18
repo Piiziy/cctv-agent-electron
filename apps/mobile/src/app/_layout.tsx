@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ApiProvider } from '../lib/api'
 import { eventIdFrom, pushSupported } from '../lib/notifications'
-import { isWeb, onNotificationOpen } from '../lib/web-push'
+import { installWebAppManifest, isWeb, onNotificationOpen } from '../lib/web-push'
 import { SessionProvider, useSession } from '../lib/session'
 import { StoreProvider } from '../lib/store-context'
 
@@ -70,6 +70,11 @@ const Gate = () => {
 }
 
 export default function RootLayout() {
+  // 홈 화면에 추가할 수 있게 웹앱 정보를 건다 — 아이폰은 그래야 웹 푸시를 받는다.
+  useEffect(() => {
+    installWebAppManifest()
+  }, [])
+
   return (
     <SafeAreaProvider>
       <SessionProvider>

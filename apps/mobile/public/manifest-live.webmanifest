@@ -1,0 +1,13 @@
+{
+  "id": "./?live=1",
+  "name": "씬스틸러 실서버 시연",
+  "short_name": "씬스틸러",
+  "description": "실서버 시연 — 서버 AI 가 위험으로 판정하면 알림을 받습니다.",
+  "lang": "ko",
+  "start_url": "./?live=1",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14233d",
+  "theme_color": "#14233d",
+  "icons": [{ "src": "icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }]
+}

@@ -1,4 +1,4 @@
-import qrcode from 'qrcode-generator'
+import { $, appUrl, fitPcFrame, renderQr, setupCollapsible, waitForFrameValue, watchViewport } from './shell'
 
 /**
  * 데모 진행기.
@@ -40,12 +40,6 @@ interface DemoHook {
 
 const PUSH_ENDPOINT = (import.meta.env.VITE_PUSH_ENDPOINT ?? '').replace(/\/+$/, '')
 
-const $ = <T extends HTMLElement>(id: string): T => {
-  const el = document.getElementById(id)
-  if (!el) throw new Error(`#${id} 가 없습니다`)
-  return el as T
-}
-
 /**
  * 페어링 코드 6자리. 서버가 [A-Z0-9]{6} 만 받는데
  * `Math.random().toString(36).slice(2, 8)` 은 운이 나쁘면 6자리가 안 나온다.
@@ -62,72 +56,11 @@ const makeCode = (): string => {
 const code = makeCode()
 
 /** 휴대폰이 열 주소. 앱은 이 코드로 자기 구독을 등록하고, 우리는 같은 코드로 알림을 쏜다. */
-const phoneUrl = new URL(`m/?code=${code}`, `${location.origin}${import.meta.env.BASE_URL}`).href
-
-const renderQr = (): void => {
-  const qr = qrcode(0, 'M')
-  qr.addData(phoneUrl)
-  qr.make()
-  $('qr').innerHTML = qr.createSvgTag({ margin: 0, scalable: true })
-  $('code').textContent = code
-}
-
-const PC_WIDTH = 1280
-const PC_HEIGHT = 860
-
-/** 고정 폭으로 그린 PC 앱을 창에 맞춰 줄인다. 창이 바뀌면 다시 계산한다. */
-const fitPcFrame = (): void => {
-  const frame = $<HTMLIFrameElement>('pc')
-  frame.style.width = `${PC_WIDTH}px`
-  frame.style.height = `${PC_HEIGHT}px`
-
-  const apply = (): void => {
-    const scale = Math.min(globalThis.innerWidth / PC_WIDTH, globalThis.innerHeight / PC_HEIGHT)
-    frame.style.transform = `scale(${scale})`
-  }
-
-  apply()
-  globalThis.addEventListener('resize', apply)
-}
-
-/** 접혀 있는 휴대폰 카드. 필요한 사람만 펼친다. */
-const setupPhoneCard = (): void => {
-  const toggle = $<HTMLButtonElement>('phone-toggle')
-  const body = $('phone-body')
-  toggle.addEventListener('click', () => {
-    body.hidden = !body.hidden
-    toggle.setAttribute('aria-expanded', String(!body.hidden))
-  })
-}
-
-/**
- * 좁은 화면이면 PC 앱 대신 모바일 앱으로 안내한다.
- * 이 주소가 대회 사이트에 걸리는 유일한 링크라 심사위원이 폰으로 먼저 열 수 있다.
- */
-const watchViewport = (): void => {
-  const narrowScreen = globalThis.matchMedia?.('(max-width: 720px)')
-  const handoff = $('handoff')
-  $<HTMLAnchorElement>('open-phone').href = phoneUrl
-
-  const apply = (narrow: boolean): void => {
-    handoff.hidden = !narrow
-  }
-
-  apply(narrowScreen?.matches ?? false)
-  narrowScreen?.addEventListener('change', (event) => apply(event.matches))
-}
-
+const phoneUrl = appUrl(`m/?code=${code}`)
 
 /** iframe 안의 PC 앱이 준비될 때까지 기다린다. 로드 직후에는 아직 훅이 없다. */
-const waitForPcApp = async (frame: HTMLIFrameElement, timeoutMs = 20_000): Promise<DemoHook | null> => {
-  const started = Date.now()
-  while (Date.now() - started < timeoutMs) {
-    const hook = (frame.contentWindow as (Window & { __sceneStealer?: DemoHook }) | null)?.__sceneStealer
-    if (hook) return hook
-    await new Promise((resolve) => setTimeout(resolve, 250))
-  }
-  return null
-}
+const waitForPcApp = (frame: HTMLIFrameElement): Promise<DemoHook | null> =>
+  waitForFrameValue(frame, (window) => (window as Window & { __sceneStealer?: DemoHook }).__sceneStealer)
 
 type NotifyResult = 'sent' | 'no-phone' | 'no-server' | 'failed'
 
@@ -229,10 +162,11 @@ const ALERT_SCHEDULE: readonly ScheduledAlert[] = [
 const RISK_LABEL = { high: '높음', medium: '보통' } as const
 
 const main = async (): Promise<void> => {
-  renderQr()
-  setupPhoneCard()
-  watchViewport()
-  fitPcFrame()
+  renderQr($('qr'), phoneUrl)
+  $('code').textContent = code
+  setupCollapsible($<HTMLButtonElement>('phone-toggle'), $('phone-body'))
+  watchViewport($('handoff'), $<HTMLAnchorElement>('open-phone'), phoneUrl)
+  fitPcFrame($<HTMLIFrameElement>('pc'))
 
   const hook = await waitForPcApp($<HTMLIFrameElement>('pc'))
   if (!hook) return

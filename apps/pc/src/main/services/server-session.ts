@@ -44,6 +44,11 @@ export interface ServerSessionDeps {
 export interface ServerSession {
   sendOtp(phone: string): Promise<void>
   verifyOtp(phone: string, code: string): Promise<SessionSummary>
+  /**
+   * 이메일·비밀번호 로그인 — 웹 데모(/wanted-test)의 데모 계정 전용이다.
+   * 매장 PC 는 휴대폰 인증만 쓴다. label 은 화면에 휴대폰 번호 대신 보일 이름이다.
+   */
+  signInWithPassword(email: string, password: string, label: string): Promise<SessionSummary>
   signOut(): Promise<void>
   summary(): SessionSummary | null
   /** 유효한 액세스 토큰. 만료가 가까우면 갱신한다. 로그인 안 됐으면 null. */
@@ -183,6 +188,21 @@ export const createServerSession = (deps: ServerSessionDeps): ServerSession => {
       const grant = await post('/verify', { phone: e164, token: code.trim(), type: 'sms' })
       if (!isGrant(grant)) throw new SessionError('로그인 서버 응답이 올바르지 않습니다.')
       const tokens = adopt(grant, e164)
+      return { userId: tokens.userId, phone: tokens.phone }
+    },
+
+    signInWithPassword: async (email, password, label) => {
+      const grant = await post('/token?grant_type=password', { email: email.trim(), password }).catch(
+        (error: unknown) => {
+          // 인증번호용 문구('인증번호가 맞지 않거나…')가 나가면 무엇이 틀렸는지 모른다.
+          if (error instanceof SessionError && !error.message.includes('잦습니다')) {
+            throw new SessionError('데모 계정으로 로그인하지 못했습니다. 계정 설정(이메일·비밀번호)을 확인해 주세요.')
+          }
+          throw error
+        },
+      )
+      if (!isGrant(grant)) throw new SessionError('로그인 서버 응답이 올바르지 않습니다.')
+      const tokens = adopt(grant, label)
       return { userId: tokens.userId, phone: tokens.phone }
     },
 

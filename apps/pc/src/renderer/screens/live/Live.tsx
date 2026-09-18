@@ -6,7 +6,7 @@
  * 사장님이 보고 있는 이 화면이 가장 먼저 알아야 한다. 이름·위치는 서버 값을 쓴다
  * (모바일에서 이름을 바꿀 수 있다).
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { EventListItem, MonitoringCamera } from '../../../shared/server-types'
 import type { CameraRuntimeStatus, SelectedCamera, UploadStatus } from '../../../shared/types'
@@ -73,16 +73,40 @@ const FILL = 'absolute inset-0 size-full object-cover'
  * 미리보기 원본이 무엇이냐에 따라 그리는 태그가 다르다.
  * 실제 카메라는 MJPEG 스트림이라 <img> 가 알아서 움직이고, 웹 데모는 파일이라 <video> 가 필요하다.
  * 주소 모양으로 판단한다 — 화면이 데모인지 아닌지를 알 필요는 없다.
+ *
+ * 시작 지점(#t=)이 붙은 영상은 그 지점부터 끝까지 한 번만 튼다. 실서버 데모가 지금 올리고
+ * 있는 장면과 화면을 맞추는 방법이다 — 반복하면 서버로 간 조각과 화면이 어긋난다.
+ * 브라우저는 뒤로 간 탭의 음소거 영상을 멈춘다. 돌아오면 그동안 흐른 만큼 앞으로 맞춘다.
  */
 const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile' | 'full' }) => {
   const preview = usePreview(camera.rtspUri, { key: `live-${quality}-${camera.id}`, quality })
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const start = preview.url ? /#t=([\d.]+)/.exec(preview.url)?.[1] : undefined
+    if (start === undefined) return
+    const mountedAt = Date.now()
+    const resync = (): void => {
+      const video = videoRef.current
+      if (!video || document.visibilityState !== 'visible') return
+      const target = Number(start) + (Date.now() - mountedAt) / 1000
+      if (Math.abs(video.currentTime - target) > 1) {
+        video.currentTime = Number.isFinite(video.duration) ? Math.min(target, video.duration) : target
+      }
+      void video.play().catch(() => undefined)
+    }
+    document.addEventListener('visibilitychange', resync)
+    return () => document.removeEventListener('visibilitychange', resync)
+  }, [preview.url])
+
   if (preview.url) {
-    return /\.(mp4|webm)(\?|$)/.test(preview.url) ? (
+    return /\.(mp4|webm)([?#]|$)/.test(preview.url) ? (
       <video
+        ref={videoRef}
         src={preview.url}
         className={FILL}
         autoPlay
-        loop
+        loop={!/#t=/.test(preview.url)}
         muted
         playsInline
         // autoPlay 속성만으로는 브라우저가 거를 때가 있다. 준비되면 한 번 더 밀어 본다.
