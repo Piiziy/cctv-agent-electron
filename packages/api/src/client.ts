@@ -1,5 +1,5 @@
 import type {
-  EventDetail, EventState, EventsPage, ListEventsQuery, Monitoring, NearbyCamera,
+  EventDetail, EventListItem, EventState, EventsPage, ListEventsQuery, Monitoring, NearbyCamera,
   NotificationSettings, SceneStealerApi, Store, TimelineCamera,
 } from './types'
 
@@ -53,12 +53,12 @@ export const createApiClient = (options: ApiClientOptions): SceneStealerApi => {
       call<EventsPage>(`/stores/${storeId}/events${query({ ...q })}`),
     getEvent: async (eventId) => (await call<{ event: EventDetail }>(`/events/${eventId}`)).event,
     setEventState: async (eventId, state: EventState, opts) =>
-      (await call<{ event: EventDetail }>(`/events/${eventId}/state`, {
+      (await call<{ event: EventListItem }>(`/events/${eventId}/state`, {
         method: 'PATCH',
         body: JSON.stringify({ state, source: 'mobile', ...(opts?.reason ? { reason: opts.reason } : {}) }),
       })).event,
     setEventMemo: async (eventId, memo) =>
-      (await call<{ event: EventDetail }>(`/events/${eventId}/memo`, {
+      (await call<{ event: EventListItem & { memo: string | null } }>(`/events/${eventId}/memo`, {
         method: 'PATCH',
         body: JSON.stringify({ memo }),
       })).event,

@@ -1,12 +1,14 @@
 import { Tabs } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { colors, navBar, spacing } from '@scene-stealer/tokens'
+import { colors, navBar } from '@scene-stealer/tokens'
+import { Icon, type IconName } from '../../components/icons'
 import { useStores } from '../../lib/store-context'
+import { bodyFont } from '../../lib/typography'
 
 /** 피그마 `navigation bar` 값 그대로. 아래 여백은 기기 홈 인디케이터에 맞춰 늘린다. */
-const TabIcon = ({ glyph, focused }: { glyph: string; focused: boolean }) => (
-  <Text style={[styles.icon, { color: focused ? navBar.activeColor : navBar.inactiveColor }]}>{glyph}</Text>
+const TabIcon = ({ name, focused }: { name: IconName; focused: boolean }) => (
+  <Icon name={name} size={navBar.iconSize} color={focused ? navBar.activeColor : navBar.inactiveColor} />
 )
 
 const Badge = ({ count }: { count: number }) =>
@@ -27,7 +29,9 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: navBar.activeColor,
         tabBarInactiveTintColor: navBar.inactiveColor,
-        tabBarLabelStyle: { fontSize: navBar.label.fontSize, fontWeight: navBar.label.fontWeight },
+        tabBarLabelStyle: { ...bodyFont, fontSize: navBar.label.fontSize, fontWeight: navBar.label.fontWeight },
+        // 창이 넓으면 라벨이 아이콘 옆으로 가는 게 기본이다. 앱은 휴대폰 폭으로 그리므로 늘 아래에 둔다.
+        tabBarLabelPosition: 'below-icon',
         tabBarItemStyle: { gap: navBar.gap },
         tabBarStyle: {
           // 아이콘 + 간격 + 라벨 한 줄이 들어갈 높이. 모자라면 라벨이 잘려 아이콘만 남는다.
@@ -38,17 +42,14 @@ export default function TabsLayout() {
           borderTopLeftRadius: navBar.radiusTop,
           borderTopRightRadius: navBar.radiusTop,
           borderTopWidth: 0,
-          shadowColor: navBar.shadow.color,
-          shadowOpacity: navBar.shadow.opacity,
-          shadowOffset: { width: 0, height: navBar.shadow.offsetY },
-          shadowRadius: navBar.shadow.blur,
+          boxShadow: `0 ${navBar.shadow.offsetY}px ${navBar.shadow.blur}px rgba(0, 0, 0, ${navBar.shadow.opacity})`,
           elevation: 8,
         },
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{ title: '홈', tabBarIcon: ({ focused }) => <TabIcon glyph="⌂" focused={focused} /> }}
+        options={{ title: '홈', tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} /> }}
       />
       <Tabs.Screen
         name="records"
@@ -56,7 +57,7 @@ export default function TabsLayout() {
           title: '기록',
           tabBarIcon: ({ focused }) => (
             <View>
-              <TabIcon glyph="☰" focused={focused} />
+              <TabIcon name="records" focused={focused} />
               <Badge count={unconfirmed} />
             </View>
           ),
@@ -64,14 +65,13 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: '설정', tabBarIcon: ({ focused }) => <TabIcon glyph="⚙" focused={focused} /> }}
+        options={{ title: '설정', tabBarIcon: ({ focused }) => <TabIcon name="settings" focused={focused} /> }}
       />
     </Tabs>
   )
 }
 
 const styles = StyleSheet.create({
-  icon: { fontSize: navBar.iconSize - 4, lineHeight: navBar.iconSize, textAlign: 'center' },
   badge: {
     position: 'absolute',
     top: -6,
@@ -84,5 +84,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontSize: 10, fontWeight: '700', color: colors.textInverse },
+  badgeText: { ...bodyFont, fontSize: 10, fontWeight: '700', color: colors.textInverse },
 })

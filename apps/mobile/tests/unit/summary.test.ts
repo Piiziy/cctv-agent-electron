@@ -19,7 +19,7 @@ describe('주간 요약', () => {
       NOW,
     )
     expect(s).toMatchObject({ risky: 2, falsePositive: 1 })
-    expect(summaryLine(s)).toBe('이번 주 · 위험 2건 · 오탐 1건')
+    expect(summaryLine(s)).toBe('이번 주 요약 · 위험 2건 · 오탐 1건')
   })
 
   it('7일보다 오래된 건 세지 않는다', () => {
@@ -37,12 +37,12 @@ describe('주간 요약', () => {
       NOW,
     )
     expect(three.repeatedHour).toBe(1)
-    expect(repeatLine(three)).toBe('1시대에 가장 잦았습니다')
+    expect(repeatLine(three)).toBe('주로 새벽 1시대에 반복됐습니다')
   })
 
   it('기록이 없으면 0건 — 없는 숫자를 지어내지 않는다', () => {
     const s = weeklySummary([], NOW)
-    expect(summaryLine(s)).toBe('이번 주 · 위험 0건 · 오탐 0건')
+    expect(summaryLine(s)).toBe('이번 주 요약 · 위험 0건 · 오탐 0건')
     expect(repeatLine(s)).toBeNull()
   })
 })

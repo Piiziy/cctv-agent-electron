@@ -108,3 +108,12 @@ describe('가짜 서버 — 매장 경계', () => {
     expect(await mock.getTimeline('store-yeoksam', '2026-09-18')).toHaveLength(0)
   })
 })
+
+describe('가짜 서버 — 응답 모양은 진짜 서버와 같다', () => {
+  it('상태를 바꾸면 목록 모양만 돌려준다 — 상세 필드(점수·클립)는 없다', async () => {
+    const updated = await api().setEventState('ev-1', 'confirmed')
+    expect(updated.state).toBe('confirmed')
+    expect(updated).not.toHaveProperty('anomalyScore')
+    expect(updated).not.toHaveProperty('clipUrl')
+  })
+})

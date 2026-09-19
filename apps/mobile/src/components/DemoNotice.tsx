@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { colors, radius, spacing, type as type_ } from '@scene-stealer/tokens'
+import { colors, radius, spacing } from '@scene-stealer/tokens'
+import { type as type_ } from '../lib/typography'
 import { Button, Caption } from './ui'
 import { config } from '../lib/config'
 import { enableWebNotifications, isWeb, pairingCode, type WebPushState } from '../lib/web-push'

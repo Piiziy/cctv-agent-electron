@@ -280,6 +280,10 @@ const VerifyPanel = ({
   // 미리보기는 서브스트림(표준 화질)으로 — 확인만 하면 되고 회선을 덜 쓴다.
   const preview = profiles.find((profile) => profile.kind === 'sub') ?? profiles[0] ?? null
   const live = usePreview(active ? (preview?.rtspUri ?? null) : null, { key: 'add-camera' })
+  const [previewFailed, setPreviewFailed] = useState(false)
+
+  // 새 주소를 받으면 다시 그려 본다.
+  useEffect(() => setPreviewFailed(false), [live.url])
 
   const probe = useCallback(async () => {
     if (!choice) return
@@ -341,8 +345,29 @@ const VerifyPanel = ({
       {failure && <Notice tone="bad">{failure}</Notice>}
 
       <VideoSurface className="min-h-[300px] flex-1 rounded-card aspect-auto">
-        {live.url ? (
-          <img src={live.url} alt="카메라 미리보기" className="absolute inset-0 size-full object-contain" />
+        {live.url && !previewFailed ? (
+          // 실제 카메라는 MJPEG 스트림(<img>), 웹 체험판은 영상 파일(<video>)이다 — 2c 타일(Live.tsx)과 같은 판단.
+          // 못 그리면 깨진 그림 대신 이유를 적는다.
+          /\.(mp4|webm)([?#]|$)/.test(live.url) ? (
+            <video
+              src={live.url}
+              className="absolute inset-0 size-full object-contain"
+              autoPlay
+              loop
+              muted
+              playsInline
+              onError={() => setPreviewFailed(true)}
+            />
+          ) : (
+            <img
+              src={live.url}
+              alt="카메라 미리보기"
+              className="absolute inset-0 size-full object-contain"
+              onError={() => setPreviewFailed(true)}
+            />
+          )
+        ) : previewFailed ? (
+          <span>미리보기를 불러오지 못했습니다</span>
         ) : probing ? (
           <Spinner className="text-gray-500" />
         ) : (
@@ -351,15 +376,15 @@ const VerifyPanel = ({
         <span className="absolute left-3 top-3 rounded-[6px] bg-[rgb(0_0_0/.55)] px-2 py-1 text-[12px] text-white">
           CAM {String(cameraNumber).padStart(2, '0')} · {formatStamp(now)}
         </span>
-        {preview && live.url && (
+        {preview && live.url && !previewFailed && (
           <span className="absolute bottom-3 right-3 rounded-chip bg-success-500 px-2.5 py-1 text-[12px] font-semibold text-white">
             연결 성공 · {formatResolution(preview.width, preview.height)}
           </span>
         )}
       </VideoSurface>
 
-      <div className="flex items-center justify-between">
-        <span className="text-body font-semibold">이 화면이 맞나요?</span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="whitespace-nowrap text-body font-semibold">이 화면이 맞나요?</span>
         <div className="flex gap-2.5">
           <Button variant="secondary" onClick={onReject}>
             아니요, 다른 카메라
@@ -508,7 +533,12 @@ export const AddCamera = () => {
 
       {full && <Notice tone="warn">카메라는 매장당 {MAX_CAMERAS}대까지 등록할 수 있습니다. 설정 ▸ 카메라 관리에서 정리해 주세요.</Notice>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[380px_1fr_400px] gap-4">
+      {/*
+        세 칸을 디자인 폭(380 · 548 · 400, 1440 창)의 비율로 나눈다. 1440 에서는 그 값 그대로이고,
+        앱 최소 폭(1180)에서도 가운데 칸이 쪼그라들지 않는다 — 양옆을 px 로 고정하면 가운데가 288px 까지 줄어
+        '이 화면이 맞나요?' 가 글자마다 끊겼다. minmax(0, …) 는 내용이 넓어도 칸을 밀지 않게 한다.
+      */}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,380fr)_minmax(0,548fr)_minmax(0,400fr)] gap-4">
         <FindPanel
           active={!full && step === 1}
           addedIds={addedIds}

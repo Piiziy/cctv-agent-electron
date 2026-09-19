@@ -11,7 +11,14 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { EventListItem, EventQuery, EventState, RiskLevel, TimelineDto } from '../../../shared/server-types'
+import type {
+  EventListItem,
+  EventQuery,
+  EventState,
+  EventSummary,
+  RiskLevel,
+  TimelineDto,
+} from '../../../shared/server-types'
 import { useConnectedStore } from '../../app/session'
 import { useStream, useStreamMessages } from '../../app/stream'
 import { ClipPlayer } from '../../components/ClipPlayer'
@@ -56,6 +63,17 @@ const TABLE_STATE_TONE: Record<EventState, string> = {
 }
 
 /* ---------------------------------------------------------------- 타임라인 */
+
+/**
+ * 2e 표 아래 '이번 주 · 위험 12건 · 오탐 3건 · 신고 1건'.
+ * 서버의 total 은 오탐까지 센 수라 위험에서 오탐을 뺀다 — 모바일 기록 화면의 주간 요약과 같은 셈이다.
+ * 서버가 숫자를 빼먹어도 'undefined건' 을 찍지 않는다.
+ */
+const weeklyLine = (summary: EventSummary): string => {
+  const count = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+  const falsePositive = count(summary.falsePositive)
+  return `이번 주 · 위험 ${Math.max(0, count(summary.total) - falsePositive)}건 · 오탐 ${falsePositive}건 · 신고 ${count(summary.reported)}건`
+}
 
 const MARK_COLOR = (item: { risk: string; state: EventState }): string =>
   item.state === 'false_positive'
@@ -535,11 +553,7 @@ export const EventList = () => {
             ))}
           </div>
           <div className="mt-auto flex items-center justify-between border-t border-gray-200 px-5 py-3.5">
-            <span className="text-caption text-gray-600">
-              {summary.data
-                ? `이번 주 · 위험 ${summary.data.total}건 · 오탐 ${summary.data.falsePositive}건 · 신고 ${summary.data.reported}건`
-                : ' '}
-            </span>
+            <span className="text-caption text-gray-600">{summary.data ? weeklyLine(summary.data) : ' '}</span>
             <div className="flex gap-1.5">
               <PageButton label="이전 페이지" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
                 ‹

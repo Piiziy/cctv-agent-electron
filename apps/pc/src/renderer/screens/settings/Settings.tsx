@@ -146,7 +146,9 @@ const TimeInput = ({
         if (next !== value?.slice(0, 5)) onCommit(next)
       }}
       className={cn(
+        // 칸 폭을 글자 폭에 맞춘다 (field-sizing: content). 못 하는 브라우저는 예전처럼 고정 폭.
         'w-14 rounded-small bg-transparent px-1 py-0.5 text-right text-body-sm font-normal text-gray-600 outline-none',
+        '[field-sizing:content] supports-[field-sizing:content]:w-auto',
         'tabular-nums hover:bg-gray-100 focus:bg-surface focus:text-gray-900',
         'focus:shadow-[inset_0_0_0_1px_var(--blue-600)]',
         invalid && 'text-error-main shadow-[inset_0_0_0_1px_var(--error-500)]',
@@ -244,9 +246,12 @@ const AlertsSection = ({ storeId }: { storeId: string }) => {
           />
         </Line>
         <Line label="수면 시간" hint="높음만 소리로">
-          <TimeInput label="수면 시작" value={quiet.sleepStart} onCommit={(sleepStart) => setQuiet({ sleepStart })} />
-          <span>–</span>
-          <TimeInput label="수면 끝" value={quiet.sleepEnd} onCommit={(sleepEnd) => setQuiet({ sleepEnd })} />
+          {/* 2g 의 '01:00 – 07:00' 한 덩어리처럼 붙여 둔다. Line 의 칸 간격(12px)을 쓰면 벌어져 보인다. */}
+          <span className="flex items-center gap-0.5">
+            <TimeInput label="수면 시작" value={quiet.sleepStart} onCommit={(sleepStart) => setQuiet({ sleepStart })} />
+            <span>–</span>
+            <TimeInput label="수면 끝" value={quiet.sleepEnd} onCommit={(sleepEnd) => setQuiet({ sleepEnd })} />
+          </span>
         </Line>
         <Line label="테스트 알림 보내기" last>
           {testState === 'sent' && <span>보냈습니다</span>}

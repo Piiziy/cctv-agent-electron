@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   EVENT_NAME, cameraStateLabel, clockOf, dateHeading, durationLabel,
-  elapsedLabel, localDate, riskLabel, sinceLabel, stateLabel, timeOf, whenLabel,
+  elapsedLabel, localDate, phoneLabel, riskLabel, sinceLabel, stateLabel, timeOf, whenLabel,
 } from '../../src/lib/format'
 
 const at = (y: number, m: number, d: number, h: number, min: number, s = 0) =>
@@ -94,5 +94,18 @@ describe('whenLabel', () => {
     const old = new Date(Date.now() - 5 * 86_400_000)
     old.setHours(9, 12, 0, 0)
     expect(whenLabel(old.toISOString())).toMatch(/^\d+월 \d+일 \(.\) 09:12:00$/)
+  })
+})
+
+describe('phoneLabel', () => {
+  it('국가번호가 붙은 번호를 010-1234-5678 모양으로', () => {
+    expect(phoneLabel('+821012345678')).toBe('010-1234-5678')
+    expect(phoneLabel('01012345678')).toBe('010-1234-5678')
+    expect(phoneLabel('+82111234567')).toBe('011-123-4567')
+  })
+
+  it('번호가 아니면 그대로 — 번호 없는 데모 계정은 이메일이 들어 있다', () => {
+    expect(phoneLabel('store-test@scene.test')).toBe('store-test@scene.test')
+    expect(phoneLabel('+8210123')).toBe('+8210123')
   })
 })

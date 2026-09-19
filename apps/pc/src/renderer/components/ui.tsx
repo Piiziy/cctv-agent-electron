@@ -133,7 +133,9 @@ export const Input = ({
       >
         <input
           className={cn(
-            'min-w-0 flex-1 bg-transparent text-[15px] text-gray-900 outline-none',
+            // w-full: 입력 칸의 기본 폭(size=20)이 격자 칸의 최소 폭이 되지 않게 한다.
+            // 그대로 두면 2b '아이디 · 비밀번호' 줄이 가운데 패널을 넓혀 오른쪽 패널이 창 밖으로 밀린다.
+            'w-full min-w-0 flex-1 bg-transparent text-[15px] text-gray-900 outline-none',
             'placeholder:text-gray-600 disabled:text-gray-600',
           )}
           {...props}
@@ -659,7 +661,9 @@ export const SelectButton = <T extends string>({
         'relative inline-flex items-center justify-center whitespace-nowrap rounded-small px-5 py-2.5',
         'bg-surface text-[15px] font-semibold text-gray-900',
         'shadow-[inset_0_0_0_1px_var(--gray-300)] hover:bg-gray-50',
-        'focus-within:ring-2 focus-within:ring-blue-600',
+        // 키보드로 왔을 때만 링을 그린다. focus-within 은 마우스로 고른 뒤에도 남아서,
+        // 필터를 바꾼 버튼에 파란 테두리가 계속 붙어 있었다 (2e 디자인에 없는 상태).
+        'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-600',
         className,
       )}
     >

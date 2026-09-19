@@ -190,19 +190,21 @@ export const createMockApi = (options: MockOptions = {}): SceneStealerApi => {
       return detailOf(find(eventId))
     },
 
+    // 진짜 서버처럼 목록 모양만 돌려준다 — 상세 필드까지 주면 화면이 그걸 믿고 쓰다가 실서버에서 깨진다.
     setEventState: async (eventId, next, opts) => {
       await wait()
       const item = find(eventId)
       item.state = next
       void opts
-      return detailOf(item)
+      const { memo: _memo, ...listItem } = item
+      return { ...listItem }
     },
 
     setEventMemo: async (eventId, memo) => {
       await wait()
       const item = find(eventId)
       item.memo = memo
-      return detailOf(item)
+      return { ...item }
     },
 
     getUnconfirmedCount: async (storeId) => {

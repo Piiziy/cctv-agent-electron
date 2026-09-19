@@ -36,7 +36,8 @@ const gridRowsFor = (cells: number): string => (cells > 6 ? 'grid-rows-3' : 'gri
 const Indicator = ({ tone, children }: { tone: 'good' | 'warn' | 'bad'; children: string }) => (
   <span
     className={cn(
-      'flex items-center gap-1.5 text-body-sm font-semibold',
+      // 줄어들지 않는다 — 창이 1440 보다 좁으면 한글이 글자마다 끊겨 세로로 쌓였다. 줄이는 건 옆의 설명 글이다.
+      'flex shrink-0 items-center gap-1.5 whitespace-nowrap text-body-sm font-semibold',
       tone === 'good' && 'text-success-600',
       tone === 'warn' && 'text-risk-medium-text',
       tone === 'bad' && 'text-error-main',
@@ -82,6 +83,19 @@ const FILL = 'absolute inset-0 size-full object-cover'
 const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile' | 'full' }) => {
   const preview = usePreview(camera.rtspUri, { key: `live-${quality}-${camera.id}`, quality })
   const videoRef = useRef<HTMLVideoElement>(null)
+  // 스트림·파일을 못 그리면 깨진 그림 아이콘 대신 이유를 적고, 5초 뒤 다시 그려 본다 (미리보기 서버가
+  // 잠깐 끊겼다 돌아오는 경우). 새 주소를 받아도 다시 그린다.
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => setFailed(false), [preview.url])
+  useEffect(() => {
+    if (!failed) return
+    const timer = setTimeout(() => {
+      setFailed(false)
+      setAttempt((count) => count + 1)
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [failed])
 
   useEffect(() => {
     const start = preview.url ? /#t=([\d.]+)/.exec(preview.url)?.[1] : undefined
@@ -103,9 +117,10 @@ const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile
     return () => document.removeEventListener('visibilitychange', resync)
   }, [preview.url])
 
-  if (preview.url) {
+  if (preview.url && !failed) {
     return /\.(mp4|webm)([?#]|$)/.test(preview.url) ? (
       <video
+        key={attempt}
         ref={videoRef}
         src={preview.url}
         className={FILL}
@@ -117,12 +132,13 @@ const LiveImage = ({ camera, quality }: { camera: SelectedCamera; quality: 'tile
         onLoadedData={(event) => {
           if (!event.currentTarget.ended) void event.currentTarget.play().catch(() => undefined)
         }}
+        onError={() => setFailed(true)}
       />
     ) : (
-      <img src={preview.url} alt="" className={FILL} />
+      <img key={attempt} src={preview.url} alt="" className={FILL} onError={() => setFailed(true)} />
     )
   }
-  if (preview.error) return <span className="px-4 text-center">화면을 불러오지 못했습니다</span>
+  if (preview.error || failed) return <span className="px-4 text-center">화면을 불러오지 못했습니다</span>
   return <Spinner className="text-gray-500" />
 }
 
@@ -131,12 +147,15 @@ const CameraCard = ({
   quality,
   now,
   onSelect,
+  compact = false,
   className,
 }: {
   tile: TileModel
   quality: 'tile' | 'full'
   now: number
   onSelect?: () => void
+  /** '하나 크게' 아래 줄의 작은 카드 — 상태 글은 빼고 점만 둔다. 글까지 두면 이름이 한 글자로 잘린다. */
+  compact?: boolean
   className?: string
 }) => {
   const state = tile.runtime?.camera ?? 'idle'
@@ -194,6 +213,7 @@ const CameraCard = ({
       <div className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5">
         <span className="truncate text-[15px] font-semibold">{tile.name}</span>
         <span
+          title={compact ? statusText : undefined}
           className={cn(
             'flex shrink-0 items-center gap-[5px] text-caption',
             broken ? 'font-semibold text-error-main' : 'text-gray-600',
@@ -203,7 +223,7 @@ const CameraCard = ({
             className="size-[7px]"
             tone={streaming ? 'connected' : broken ? 'disconnected' : state === 'connecting' ? 'reconnecting' : 'idle'}
           />
-          {statusText}
+          {!compact && statusText}
         </span>
       </div>
     </button>
@@ -457,7 +477,7 @@ export const Live = () => {
       <div className="flex min-h-0 min-w-0 flex-col gap-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-5">
-            <h1 className="text-h1">실시간</h1>
+            <h1 className="shrink-0 whitespace-nowrap text-h1">실시간</h1>
             {/* 2c 는 5대 중 4대만 붙어 있어도 초록이다 — 한 대라도 보고 있으면 감시 중이다. */}
             <Indicator tone={status.running && streamingCount > 0 ? 'good' : 'bad'}>
               {status.running ? `감시 중 ${streamingCount}/${tiles.length}대` : '감시 중지됨'}
@@ -521,7 +541,14 @@ export const Live = () => {
               {tiles
                 .filter((tile) => tile.key !== focused?.key)
                 .map((tile) => (
-                  <CameraCard key={tile.key} tile={tile} quality="tile" now={now} onSelect={() => setFocusKey(tile.key)} />
+                  <CameraCard
+                    key={tile.key}
+                    tile={tile}
+                    quality="tile"
+                    now={now}
+                    compact
+                    onSelect={() => setFocusKey(tile.key)}
+                  />
                 ))}
             </div>
           </div>

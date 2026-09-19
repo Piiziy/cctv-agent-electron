@@ -110,8 +110,9 @@ export interface TimelineCamera {
 
 export interface QuietHours {
   readonly businessHoursHighOnly: boolean
-  readonly sleepStart: string
-  readonly sleepEnd: string
+  /** 수면(방해금지) 구간. 새 매장은 둘 다 null — 정하지 않았다 (백엔드 routers/notifications.py). */
+  readonly sleepStart: string | null
+  readonly sleepEnd: string | null
   readonly sleepHighOnly: boolean
   readonly overrideDndForHigh: boolean
 }
@@ -141,12 +142,17 @@ export interface SceneStealerApi {
   getMonitoring(storeId: string): Promise<Monitoring>
   listEvents(storeId: string, query?: ListEventsQuery): Promise<EventsPage>
   getEvent(eventId: string): Promise<EventDetail>
+  /**
+   * 서버는 목록 모양(EventListItem)만 돌려준다 — 점수·클립·조각 같은 상세 필드는 없다
+   * (백엔드 routers/events.py change_event_state). 상세 화면은 받은 state 만 합쳐야 한다.
+   */
   setEventState(
     eventId: string,
     state: EventState,
     options?: { readonly reason?: string },
-  ): Promise<EventDetail>
-  setEventMemo(eventId: string, memo: string): Promise<EventDetail>
+  ): Promise<EventListItem>
+  /** 이것도 목록 모양 + memo 다. */
+  setEventMemo(eventId: string, memo: string): Promise<EventListItem & { readonly memo: string | null }>
   getUnconfirmedCount(storeId: string, scope?: 'today' | 'all'): Promise<number>
   getTimeline(storeId: string, date: string): Promise<readonly TimelineCamera[]>
   getNearbyCameras(eventId: string): Promise<readonly NearbyCamera[]>

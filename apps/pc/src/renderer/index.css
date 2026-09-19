@@ -48,4 +48,10 @@
   :focus-visible {
     @apply outline-none ring-2 ring-blue-600;
   }
+
+  /* 글자를 넣는 칸은 디자인의 입력 칸 focus 상태(1px blue/600 테두리)를 스스로 그린다.
+     링까지 그리면 칸 안에 파란 네모가 한 겹 더 생긴다 (2a 휴대폰 번호 칸). */
+  :is(input, textarea, select):focus-visible {
+    @apply ring-0;
+  }
 }

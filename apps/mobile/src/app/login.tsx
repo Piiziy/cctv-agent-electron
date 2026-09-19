@@ -1,10 +1,20 @@
 import { useState } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors, radius, spacing, type as type_ } from '@scene-stealer/tokens'
-import { Button, Caption } from '../components/ui'
+import { colors, radius, spacing } from '@scene-stealer/tokens'
+import { Logo } from '../components/Logo'
+import { Button, Caption, TextField } from '../components/ui'
 import { config, usingMockAuth } from '../lib/config'
 import { useSession } from '../lib/session'
+import { type as type_ } from '../lib/typography'
+
+/** 010-1234-5678 모양으로 맞춘다 (PC 2a 와 같다). 숫자만 남기고 11자리까지. */
+const formatPhone = (raw: string): string => {
+  const digits = raw.replace(/\D/g, '').slice(0, 11)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+}
 
 /**
  * 로그인 — 휴대폰 번호 + 인증번호. PC 앱과 같은 계정이다.
@@ -21,7 +31,7 @@ const LiveSignInProblem = () => {
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
         <View style={styles.brandBlock}>
-          <Text style={styles.brand}>Scene Stealer</Text>
+          <Logo size={26} />
           <Text style={styles.lede}>매장에서 일어난 이상 행동을{'\n'}바로 알려드립니다.</Text>
         </View>
         {liveError ? <Caption tone="danger">{liveError}</Caption> : null}
@@ -68,19 +78,17 @@ function PhoneLogin() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.brandBlock}>
-            <Text style={styles.brand}>Scene Stealer</Text>
+            <Logo size={26} />
             <Text style={styles.lede}>매장에서 일어난 이상 행동을{'\n'}바로 알려드립니다.</Text>
           </View>
 
           <View style={styles.form}>
             <Text style={styles.label}>휴대폰 번호</Text>
-            <TextInput
-              style={styles.input}
+            <TextField
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(value) => setPhone(formatPhone(value))}
               editable={!sent}
               placeholder="010-1234-5678"
-              placeholderTextColor={colors.textSecondary}
               keyboardType="phone-pad"
               autoComplete="tel"
             />
@@ -88,15 +96,17 @@ function PhoneLogin() {
             {sent ? (
               <>
                 <Text style={styles.label}>인증번호</Text>
-                <TextInput
-                  style={styles.input}
+                <TextField
                   value={code}
-                  onChangeText={setCode}
+                  onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="6자리"
-                  placeholderTextColor={colors.textSecondary}
                   keyboardType="number-pad"
+                  autoComplete="one-time-code"
                   maxLength={6}
                   autoFocus
+                  onSubmitEditing={() => {
+                    if (code.length === 6) void run(async () => signIn(await auth.verifyOtp(phone, code)))
+                  }}
                 />
               </>
             ) : null}
@@ -104,9 +114,10 @@ function PhoneLogin() {
             {error ? <Caption tone="danger">{error}</Caption> : null}
 
             {sent ? (
+              // 흐름을 끝내는 버튼 — PC 2a 의 '로그인'과 같은 남색.
               <Button
-                label="확인"
-                tone="primary"
+                label="로그인"
+                tone="brand"
                 loading={busy}
                 disabled={code.length < 6}
                 onPress={() => run(async () => signIn(await auth.verifyOtp(phone, code)))}
@@ -150,20 +161,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: spacing.xl, gap: spacing.xxl, flexGrow: 1, justifyContent: 'center' },
   brandBlock: { gap: spacing.md },
-  brand: { fontSize: 28, fontWeight: '700', color: colors.brand },
-  lede: { ...type_.body, color: colors.textSecondary, lineHeight: 22 },
+  lede: { ...type_.body, fontSize: 15, color: colors.textSecondary, lineHeight: 22 },
   form: { gap: spacing.md },
-  label: { ...type_.label, color: colors.text },
-  input: {
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.medium,
-    paddingHorizontal: spacing.lg,
-    ...type_.body,
-    color: colors.text,
-    backgroundColor: colors.bg,
-  },
+  label: { ...type_.label, fontWeight: '600', color: colors.text },
   notice: {
     padding: spacing.lg,
     backgroundColor: colors.surfaceSubtle,

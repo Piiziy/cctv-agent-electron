@@ -94,12 +94,16 @@ const SegmentTimeline = ({
   const windowStart = slotStarts[0] ?? 0
   const windowMs = segmentMs * SLOTS
   const playhead = ((selectedStart + position * 1000 - windowStart) / windowMs) * 100
+  // 눈금은 칸의 경계(칸 수 + 1)다 — 칸 시작만 찍으면 맨 오른쪽 글자가 마지막 칸의 '시작'인데 '끝' 자리에 선다.
+  // 조각이 분 단위가 아니면(웹 체험판 30초) 시·분만으로는 이웃 눈금이 같은 글자가 되므로 초까지 적는다.
+  const ticks = [...slotStarts, windowStart + windowMs]
+  const withSeconds = ticks.some((tick) => new Date(tick).getSeconds() !== 0)
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex justify-between text-caption text-gray-600">
-        {slotStarts.map((start) => (
-          <span key={start}>{formatClock(new Date(start).toISOString())}</span>
+        {ticks.map((tick) => (
+          <span key={tick}>{(withSeconds ? formatClockSeconds : formatClock)(new Date(tick).toISOString())}</span>
         ))}
       </div>
       <div className="relative flex h-9 overflow-hidden rounded-small bg-gray-100">

@@ -2,7 +2,7 @@
  * 상단 내비게이션 — design/씬스틸러 PC 앱.dc.html 2c 의 .nav 그대로.
  * PC 앱은 사이드바 대신 이걸 쓴다 (디자인시스템 4장). 높이 76.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import iconUser from '../assets/icon-user-dark.svg'
 import logoMark from '../assets/logo-mark-navy.svg'
@@ -34,6 +34,24 @@ export const Logo = ({ className }: { className?: string }) => (
 export const TopNav = ({ storeName, unconfirmedCount, userLabel, onSignOut }: TopNavProps) => {
   const navigate = useNavigate()
   const [storeMenuOpen, setStoreMenuOpen] = useState(false)
+  const storeMenuRef = useRef<HTMLDivElement>(null)
+
+  // 펼친 매장 메뉴는 바깥을 누르거나 Esc 로 닫힌다. 안 닫히면 아래 화면의 버튼('하나 크게' 등)을 가린 채 남는다.
+  useEffect(() => {
+    if (!storeMenuOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!storeMenuRef.current?.contains(event.target as Node)) setStoreMenuOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setStoreMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [storeMenuOpen])
 
   return (
     <header
@@ -69,9 +87,11 @@ export const TopNav = ({ storeName, unconfirmedCount, userLabel, onSignOut }: To
 
       <div className="flex items-center gap-6">
         {storeName && (
-          <div className="relative">
+          <div ref={storeMenuRef} className="relative">
             <button
               type="button"
+              aria-haspopup="menu"
+              aria-expanded={storeMenuOpen}
               onClick={() => setStoreMenuOpen((open) => !open)}
               className={cn(
                 'inline-flex items-center whitespace-nowrap rounded-chip px-[22px] py-2',

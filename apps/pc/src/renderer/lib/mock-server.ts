@@ -554,12 +554,12 @@ export const createMockServer = ({ demo }: MockServerOptions = {}): MockServer =
     {
       method: 'GET',
       pattern: /^\/stores\/([^/]+)\/events\/summary$/,
-      // 디자인 2e — "이번 주 · 위험 12건 · 오탐 3건 · 신고 1건"
+      // 디자인 2e — "이번 주 · 위험 12건 · 오탐 3건 · 신고 1건". 서버의 total 은 오탐까지 센 수다 (12 + 3).
       handle: () =>
         ok({
           from: new Date(Date.now() - 7 * 86_400_000).toISOString(),
           to: new Date().toISOString(),
-          total: 12,
+          total: 15,
           falsePositive: 3,
           reported: 1,
           byWeekday: [1, 2, 1, 3, 2, 2, 1],

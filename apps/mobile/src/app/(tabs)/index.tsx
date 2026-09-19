@@ -3,7 +3,8 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import type { EventListItem, Monitoring } from '@scene-stealer/api'
-import { colors, radius, spacing, type as type_ } from '@scene-stealer/tokens'
+import { colors, spacing } from '@scene-stealer/tokens'
+import { type as type_ } from '../../lib/typography'
 import { Caption, Card, Chip, EmptyState, Heading } from '../../components/ui'
 import { EventRow } from '../../components/EventRow'
 import { DemoNotice } from '../../components/DemoNotice'
@@ -93,23 +94,38 @@ export default function HomeScreen() {
         <DemoNotice />
 
         <View style={styles.chips}>
+          {/* 뼈대 2k — 문제가 있는 매장(PC 꺼짐) 칩에 빨간 점. */}
           {stores.map((store) => (
             <Chip
               key={store.id}
               label={store.name}
               selected={store.id === selected?.id}
-              tone={store.device?.online === false ? 'danger' : 'default'}
+              tone={store.device?.online === false && store.id !== selected?.id ? 'danger' : 'default'}
+              dot={store.device?.online === false ? 'danger' : undefined}
               onPress={() => select(store.id)}
             />
           ))}
         </View>
 
         <Card style={styles.statusCard}>
-          <Text style={styles.statusHeadline}>
-            {pcOffline
-              ? 'PC가 꺼져 있어 감시가 멈췄습니다'
-              : `감시 중 · 카메라 ${monitoring?.monitoringCount ?? 0}/${monitoring?.totalCount ?? 0}대`}
-          </Text>
+          {/* 뼈대 2k — 맨 위 한 문장 앞의 상태 점. PC 2c 와 같이 한 대라도 보고 있으면 초록이다 —
+              끊긴 카메라는 바로 아래 빨간 줄이 말한다. PC 가 꺼졌거나 보는 카메라가 없으면 빨강. */}
+          <View style={styles.headlineRow}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    pcOffline || (monitoring !== null && monitoring.monitoringCount === 0) ? colors.danger : colors.ok,
+                },
+              ]}
+            />
+            <Text style={styles.statusHeadline}>
+              {pcOffline
+                ? 'PC가 꺼져 있어 감시가 멈췄습니다'
+                : `감시 중 · 카메라 ${monitoring?.monitoringCount ?? 0}/${monitoring?.totalCount ?? 0}대`}
+            </Text>
+          </View>
           {broken.map((camera) => (
             <Text key={camera.id} style={styles.warn}>
               '{camera.name}' 카메라 {cameraStateLabel[camera.state]}
@@ -156,10 +172,11 @@ export default function HomeScreen() {
               key={camera.id}
               label={
                 camera.state === 'connected'
-                  ? `● ${camera.name}`
-                  : `○ ${camera.name} · ${cameraStateLabel[camera.state]}${camera.disconnectedForSec ? ` ${elapsedLabel(camera.disconnectedForSec)}` : ''}`
+                  ? camera.name
+                  : `${camera.name} · ${cameraStateLabel[camera.state]}${camera.disconnectedForSec ? ` ${elapsedLabel(camera.disconnectedForSec)}` : ''}`
               }
-              tone={camera.state === 'connected' ? 'default' : 'danger'}
+              dot={camera.state === 'connected' ? 'ok' : camera.state === 'unknown' ? 'idle' : 'danger'}
+              tone={camera.state === 'connected' || camera.state === 'unknown' ? 'default' : 'danger'}
             />
           ))}
         </View>
@@ -173,7 +190,9 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   statusCard: { padding: spacing.lg, gap: spacing.sm },
-  statusHeadline: { ...type_.title, fontSize: 18, color: colors.text },
+  headlineRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  statusHeadline: { ...type_.title, fontSize: 18, color: colors.text, flexShrink: 1 },
   warn: { ...type_.label, color: colors.danger },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   unconfirmed: { ...type_.label, color: colors.danger },

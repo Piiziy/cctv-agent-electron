@@ -68,6 +68,18 @@ export const elapsedLabel = (seconds: number): string => {
   return `${Math.floor(seconds / 3600)}시간`
 }
 
+/**
+ * 계정의 휴대폰 번호를 읽기 좋게 — "+821012345678" → "010-1234-5678".
+ * 로그인 서버는 국가번호를 붙인 모양으로 준다. 번호가 아닌 값(번호 없는 계정의 이메일)은 그대로 둔다.
+ */
+export const phoneLabel = (value: string): string => {
+  if (!/^\+?[\d\s-]+$/.test(value)) return value
+  const local = value.replace(/^\+82/, '0').replace(/\D/g, '')
+  if (local.length === 11) return `${local.slice(0, 3)}-${local.slice(3, 7)}-${local.slice(7)}`
+  if (local.length === 10) return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`
+  return value
+}
+
 export const sinceLabel = (iso: string | null, now: Date = new Date()): string => {
   if (!iso) return '없음'
   return `${elapsedLabel((now.getTime() - Date.parse(iso)) / 1000)} 전`
