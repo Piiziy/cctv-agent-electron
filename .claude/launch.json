@@ -18,6 +18,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview", "-w", "@scene-stealer/demo-web", "--", "--port", "4173", "--strictPort"],
       "port": 4173
+    },
+    {
+      "name": "stub-backend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["apps/demo-web/scripts/stub-backend.mjs"],
+      "port": 8787
+    },
+    {
+      "name": "design",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "design"],
+      "port": 5500
     }
   ]
 }

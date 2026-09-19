@@ -118,6 +118,9 @@ describe('uploadSegment', () => {
       filePath,
     })
     expect(result.kind).toBe('retry')
+    // 연결이 거절돼도 fetch 는 본문(파일) 첫 조각을 이미 읽으러 가 있다. 그 읽기가 끝나기 전에 afterEach 가
+    // 임시 폴더를 지우면 윈도에서 NotReadableError 가 처리 안 된 거부로 남는다 — 읽기가 끝나기를 기다린다.
+    await new Promise((resolve) => setTimeout(resolve, 100))
   })
 
   it('파일이 사라졌으면 fatal(missing-file) — 재시도해도 소용없다', async () => {

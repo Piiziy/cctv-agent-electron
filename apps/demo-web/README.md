@@ -32,6 +32,24 @@ npm run build -w @scene-stealer/demo-web          # 전체 굽기
 npm run preview -w @scene-stealer/demo-web        # 구운 것 띄우기 → http://localhost:4173/wanted-test/
 ```
 
+### 로컬에서 흐름 끝까지 돌려 보기 (가짜 백엔드)
+
+[`scripts/stub-backend.mjs`](scripts/stub-backend.mjs) 는 API 계약 모양대로 답하는 가짜 백엔드다 (로그인 ·
+카메라 등록 · 조각 업로드 · AI 판정 흉내 · 실시간 채널 · 확인/오탐). 도커·Supabase·AI 워커 없이
+'조각 업로드 → PC 경고 → 휴대폰에서 확인했어요 → PC 경고 닫힘' 을 볼 수 있다. 응답 모양은 진짜 백엔드와
+같게 둔다 — 편하게 주면 화면이 그걸 믿다가 실서버에서 깨진다 (상태 변경 응답이 그랬다).
+
+```bash
+LIVE_API_URL=http://localhost:8787 LIVE_SUPABASE_URL=http://localhost:8787 LIVE_SUPABASE_ANON_KEY=local \
+LIVE_EMAIL=demo@scene.test LIVE_PASSWORD=pw LIVE_DEVICE_TOKEN=ss_dev_demo LIVE_STORE_ID=store-demo \
+npm run build -w @scene-stealer/demo-web
+node apps/demo-web/scripts/stub-backend.mjs          # :8787 — 첫 조각에서 위험 이벤트를 만든다
+npm run preview -w @scene-stealer/demo-web           # http://localhost:4173/wanted-test/
+```
+
+휴대폰 화면은 같은 주소를 휴대폰 크기 창(개발자 도구의 기기 흉내)으로 열면 `/m/?live=1` 로 넘어간다.
+이 빌드는 가짜 백엔드를 가리키니 배포하지 않는다 — Vercel 은 저장소를 새로 굽는다.
+
 ## 가짜 서버 데모 동선 (/index.html)
 
 실서버 시연(/wanted-test) 동선은 [`docs/demo-submission.md`](../../docs/demo-submission.md) 에 있다.

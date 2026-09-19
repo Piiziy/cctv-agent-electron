@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { buildSegmentArgs } from '../../src/main/lib/segment-args'
 
@@ -10,6 +11,9 @@ const base = {
 }
 
 const joined = (o = base) => buildSegmentArgs(o).join(' ')
+
+// 경로는 OS 구분자로 만든다 (윈도에서는 ). 기대값도 같은 방식으로 만들어야 어느 OS 에서나 맞는다.
+const writing = (name: string): string => join(base.spoolDir, '.writing', name)
 
 describe('buildSegmentArgs', () => {
   it('RTSP를 TCP로 강제한다 (NAT/방화벽 환경의 실무 기본값)', () => {
@@ -28,7 +32,7 @@ describe('buildSegmentArgs', () => {
   })
 
   it('manifest를 반드시 지정한다 (조각 완성 신호)', () => {
-    expect(joined()).toContain('-segment_list /tmp/spool/.writing/manifest.txt')
+    expect(joined()).toContain(`-segment_list ${writing('manifest.txt')}`)
     expect(joined()).toContain('-segment_list_type flat')
   })
 
@@ -37,7 +41,7 @@ describe('buildSegmentArgs', () => {
   })
 
   it('쓰는 중인 조각은 숨김 하위 폴더에 쓴다 (완성된 것과 물리적으로 분리)', () => {
-    expect(joined()).toContain('/tmp/spool/.writing/part_%05d.mp4')
+    expect(joined()).toContain(writing('part_%05d.mp4'))
   })
 
   it('파일명에 시각(strftime)을 쓰지 않는다 — 초 단위라 짧은 조각에서 충돌한다', () => {
@@ -69,6 +73,6 @@ describe('buildSegmentArgs', () => {
   it('입력(-i)이 출력 경로보다 먼저 온다', () => {
     const args = buildSegmentArgs(base)
     expect(args.indexOf('-i')).toBeLessThan(args.length - 1)
-    expect(args[args.length - 1]).toBe('/tmp/spool/.writing/part_%05d.mp4')
+    expect(args[args.length - 1]).toBe(writing('part_%05d.mp4'))
   })
 })
