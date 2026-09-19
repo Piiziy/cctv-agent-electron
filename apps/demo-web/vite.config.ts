@@ -14,7 +14,19 @@ export default defineConfig(() => ({
     // 직접 만져야 하므로 개발 중에도 같은 출처로 보여야 한다 — 그래서 각자의 dev 서버로 프록시한다.
     //   npm run ui -w cctv-agent                 → 5174 (PC 앱)
     //   npm run web -w scene-stealer-mobile      → 8081 (모바일 앱)
+    // /wanted-test/pc · /wanted-test/m 은 실서버 시연 빌드 자리다. 개발 중에 그쪽을 보려면 두 dev 서버를
+    // VITE_LIVE_MODE=1 · EXPO_PUBLIC_LIVE_MODE=1 과 LIVE_* 값으로 띄운다 (배포 빌드는 build-all.mjs 가 나눠 굽는다).
     proxy: {
+      '/wanted-test/pc': {
+        target: 'http://localhost:5174',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/wanted-test\/pc/, ''),
+      },
+      '/wanted-test/m': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/wanted-test\/m/, ''),
+      },
       '/pc': { target: 'http://localhost:5174', changeOrigin: true, rewrite: (path) => path.replace(/^\/pc/, '') },
       '/m': { target: 'http://localhost:8081', changeOrigin: true, rewrite: (path) => path.replace(/^\/m/, '') },
     },

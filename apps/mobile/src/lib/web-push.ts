@@ -60,9 +60,8 @@ export const needsHomeScreenInstall = (): boolean => {
 }
 
 /**
- * 홈 화면에 추가할 때 쓰는 웹앱 정보(manifest)를 건다. 실서버 시연이면 시작 주소가 `?live=1` 인
- * 쪽을 건다 — 아이폰의 홈 화면 앱은 사파리와 저장소를 나눠 쓰지 않아서, 주소에 표시가 없으면
- * 실서버 시연인지 알 길이 없다.
+ * 홈 화면에 추가할 때 쓰는 웹앱 정보(manifest)를 건다. 시작 주소는 앱이 올라간 경로(`./`)라
+ * 실서버 시연 빌드(/wanted-test/m/)는 홈 화면에서 열어도 그 주소로 열린다.
  */
 export const installWebAppManifest = (): void => {
   if (!isWeb || typeof document === 'undefined' || document.querySelector('link[rel="manifest"]')) return
@@ -71,10 +70,7 @@ export const installWebAppManifest = (): void => {
     Object.entries(attrs).forEach(([name, value]) => el.setAttribute(name, value))
     document.head.appendChild(el)
   }
-  add('link', {
-    rel: 'manifest',
-    href: `${config.webBaseUrl}/${config.live ? 'manifest-live.webmanifest' : 'manifest.webmanifest'}`,
-  })
+  add('link', { rel: 'manifest', href: `${config.webBaseUrl}/manifest.webmanifest` })
   add('link', { rel: 'apple-touch-icon', href: `${config.webBaseUrl}/icon.png` })
   add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' })
   add('meta', { name: 'apple-mobile-web-app-title', content: '씬스틸러' })

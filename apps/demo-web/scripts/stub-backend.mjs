@@ -16,7 +16,7 @@
  *   node apps/demo-web/scripts/stub-backend.mjs          # :8787
  *   npm run preview -w @scene-stealer/demo-web           # http://localhost:4173/wanted-test/
  *
- * 휴대폰 화면은 같은 주소를 휴대폰 크기 창(개발자 도구의 기기 흉내)으로 열면 /m/?live=1 로 넘어간다.
+ * 휴대폰 화면은 같은 주소를 휴대폰 크기 창(개발자 도구의 기기 흉내)으로 열면 /wanted-test/m/ 으로 넘어간다.
  *
  * 환경변수: PORT(8787) · EVENT_ON_SEGMENT(1 — 몇 번째 조각에서 위험을 만들지) ·
  * CLIP_URL(경고 클립 주소 — 비우면 구운 시연 영상의 첫 조각).
@@ -36,10 +36,10 @@ const EVENT_ON_SEGMENT = Number(process.env.EVENT_ON_SEGMENT ?? 1)
 /** 경고 클립 — 구운 시연 영상의 첫 조각을 미리보기 서버(4173)에서 튼다. */
 const clipUrl = () => {
   if (process.env.CLIP_URL) return process.env.CLIP_URL
-  const manifestPath = resolve(dirname(fileURLToPath(import.meta.url)), '../dist/demo-video/manifest.json')
+  const manifestPath = resolve(dirname(fileURLToPath(import.meta.url)), '../dist/wanted-test/demo-video/manifest.json')
   if (!existsSync(manifestPath)) return null
   const file = JSON.parse(readFileSync(manifestPath, 'utf8')).videos?.[0]?.segments?.[0]?.file
-  return file ? `http://localhost:4173/demo-video/${file}` : null
+  return file ? `http://localhost:4173/wanted-test/demo-video/${file}` : null
 }
 const CLIP_URL = clipUrl()
 

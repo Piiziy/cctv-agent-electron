@@ -4,10 +4,13 @@ import { $, appUrl } from './shell'
  * 실서버 시연 셸 (`/wanted-test`).
  *
  * 실제 앱 화면만 보인다 — 설명·진행 표시·QR 을 덧붙이지 않는다.
- *  - 컴퓨터: 매장 PC 앱을 창 가득 띄운다. 앱이 데모 계정으로 로그인해 시연 영상을 카메라 삼아
- *    실제 서버로 조각을 올리고, 경고는 서버 AI 가 판정한 것만 뜬다.
- *  - 휴대폰: 사장님 앱(`/m/?live=1`)으로 바로 넘어간다. 같은 데모 계정으로 열린다.
+ *  - 컴퓨터: 매장 PC 앱(`/wanted-test/pc/`)을 창 가득 띄운다. 앱이 데모 계정으로 로그인해 시연 영상을
+ *    카메라 삼아 실제 서버로 조각을 올리고, 경고는 서버 AI 가 판정한 것만 뜬다.
+ *  - 휴대폰: 사장님 앱(`/wanted-test/m/`)으로 바로 넘어간다. 같은 데모 계정으로 열린다.
  * 셸이 직접 그리는 것은 시작하지 못했을 때의 이유뿐이다.
+ *
+ * 데모 계정은 주소에 /wanted-test 가 있을 때만 붙는다. 두 앱의 실서버 빌드는 이 아래에만 있고,
+ * /pc/ · /m/ 은 데모 계정이 실리지 않은 가짜 서버 데모다 (scripts/build-all.mjs).
  */
 
 // PC 앱(apps/pc/src/renderer/lib/live/live-api.ts)이 열어 두는 손잡이의 모양. 앱이 달라서 import 대신 옮겨 적는다.
@@ -118,14 +121,14 @@ const onAppLoad = async (frame: HTMLIFrameElement): Promise<void> => {
 
 const main = (): void => {
   if (isPhone()) {
-    globalThis.location.replace(appUrl('m/?live=1'))
+    globalThis.location.replace(appUrl('wanted-test/m/'))
     return
   }
 
   const frame = $<HTMLIFrameElement>('pc')
   fillWindow(frame)
   frame.addEventListener('load', () => void onAppLoad(frame))
-  frame.src = appUrl('pc/?live=1')
+  frame.src = appUrl('wanted-test/pc/')
 }
 
 main()

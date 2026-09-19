@@ -49,7 +49,7 @@ node apps/demo-web/scripts/demo-video.mjs
 - 조각 경계(30초 · 60초 …)에 걸치지 않게 둔다.
 - 영상 파일은 배포에 그대로 실려 **누구나 받을 수 있다**. 공개해도 되는 영상만 넣는다.
 
-**넣기 전에 AI 로 돌려 본다.** 잘린 조각(`apps/demo-web/.generated/demo-video/*/seg-000.mp4`)을
+**넣기 전에 AI 로 돌려 본다.** 잘린 조각(`apps/demo-web/.generated/wanted-test/demo-video/*/seg-000.mp4`)을
 백엔드 `ai-worker` 의 `pipeline.report.process_video` 에 넣으면 워커와 똑같이 판정한다. 학습에 시드가 없으니
 몇 번 돌려서 매번 1.5배를 넘는지 본다.
 

@@ -1,5 +1,5 @@
 /**
- * 실서버 데모 (`/wanted-test` → 이 앱을 `?live=1` 로 연다).
+ * 실서버 데모 (`/wanted-test` 셸이 이 앱의 실서버 빌드 `/wanted-test/pc/` 를 연다).
  *
  * `?demo=1` 데모는 브라우저 안의 가짜 서버를 본다. 이쪽은 **진짜 백엔드**를 본다 —
  * 데모 계정으로 로그인하고, 테스트 영상을 CCTV 대신 물려 조각을 실제로 올린다.
@@ -50,15 +50,9 @@ const REQUIRED: readonly (readonly [keyof LiveConfig, string])[] = [
 export const missingLiveConfig = (config: LiveConfig = liveConfig): string[] =>
   REQUIRED.filter(([key]) => !config[key]).map(([, name]) => name)
 
-const queryOf = (source: string): URLSearchParams => {
-  const start = source.indexOf('?')
-  return new URLSearchParams(start === -1 ? '' : source.slice(start + 1))
-}
-
-const liveRequested = (): boolean => {
-  // HashRouter 라 주소가 '/?live=1' 로도 '/#/live?live=1' 로도 들어온다. 둘 다 받는다.
-  const value = queryOf(window.location.search).get('live') ?? queryOf(window.location.hash).get('live')
-  return value === '1' || value === 'true'
-}
-
-export const isLiveDemo = typeof window !== 'undefined' && !window.api && liveRequested()
+/**
+ * 실서버 데모 빌드인가. 웹 데모 빌드(build-all.mjs)가 `/wanted-test/pc/` 로 구울 때만 VITE_LIVE_MODE=1 을 넣는다.
+ * 주소(예전의 `?live=1`)로는 켜지지 않는다 — 데모 계정은 주소에 /wanted-test 가 있을 때만 붙어야 하고,
+ * `/pc/` 빌드에는 데모 계정 값도 싣지 않는다.
+ */
+export const isLiveDemo = typeof window !== 'undefined' && !window.api && import.meta.env.VITE_LIVE_MODE === '1'

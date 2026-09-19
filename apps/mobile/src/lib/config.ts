@@ -6,30 +6,14 @@
  */
 const trim = (value: string | undefined): string => (value ?? '').trim()
 
-const LIVE_FLAG_KEY = 'scene-stealer.live'
-
 /**
- * 실서버 시연 (`/wanted-test` 의 QR → `/m/?live=1`). 데모 계정으로 바로 들어가 진짜 서버를 본다.
+ * 실서버 시연 빌드인가 (`/wanted-test` → 휴대폰이면 `/wanted-test/m/`). 데모 계정으로 바로 들어가 진짜 서버를 본다.
  *
- * 한 번 들어오면 이 브라우저에 기억한다 — 알림을 탭해 다시 열리는 주소(`/m/?event=…`)에는
- * 표시가 없다. 가짜 데모의 QR(`?code=`)로 들어오거나 `?live=0` 이면 잊는다.
+ * 웹 데모 빌드(apps/demo-web/scripts/build-all.mjs)가 `/wanted-test/m/` 로 구울 때만 EXPO_PUBLIC_LIVE_MODE=1 을
+ * 넣는다. 주소(예전의 `?live=1`)나 브라우저 기억으로는 켜지지 않는다 — 데모 계정은 주소에 /wanted-test 가
+ * 있을 때만 붙어야 한다. 이 빌드는 모든 화면 주소가 /wanted-test/m/… 라 새로고침·알림 탭에도 그대로다.
  */
-const detectLive = (): boolean => {
-  const search = typeof window === 'undefined' ? undefined : window.location?.search
-  if (typeof search !== 'string') return false // 네이티브 앱
-  const params = new URLSearchParams(search)
-  const flag = params.get('live')
-  try {
-    if (flag === '1') globalThis.localStorage?.setItem(LIVE_FLAG_KEY, '1')
-    if (flag === '0' || params.has('code')) globalThis.localStorage?.removeItem(LIVE_FLAG_KEY)
-    if (flag === '0' || params.has('code')) return false
-    return flag === '1' || globalThis.localStorage?.getItem(LIVE_FLAG_KEY) === '1'
-  } catch {
-    return flag === '1'
-  }
-}
-
-const live = detectLive()
+const live = trim(process.env.EXPO_PUBLIC_LIVE_MODE) === '1'
 
 export const config = {
   /** 실서버 시연 중인지. 이때는 아래 주소들이 LIVE_* 값이다. */

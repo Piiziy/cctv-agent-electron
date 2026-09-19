@@ -27,11 +27,13 @@ Vercel 에 배포한 주소. 이 한 주소 안에 다 있다.
 /wanted-test   실서버 시연 — 데모 계정 · 시연 영상 · 실제 서버 AI 판정 (제출용 주소)
 /              → /wanted-test 로 넘어간다 (2026-09-18, vercel.json redirects)
 /index.html    가짜 서버로 도는 예전 데모 (서버 없이도 끝까지 돈다). 링크는 걸려 있지 않다
-/pc/           매장 PC 수집기 화면
-/m/            사장님 모바일 앱
+/wanted-test/m/   실서버 시연의 사장님 앱 — 휴대폰으로 /wanted-test 를 열면 여기로 넘어간다
+/wanted-test/pc/  실서버 시연의 매장 PC 화면 — /wanted-test 가 창 가득 띄운다
+/pc/  /m/         가짜 서버 데모의 PC 화면 · 사장님 앱 (데모 계정이 실리지 않는다)
 ```
 
 루트로 들어와도 실서버 시연(데모 계정 로그인)이 열리므로, `/wanted-test` 는 더 이상 숨은 주소가 아니다.
+데모 계정은 주소에 `/wanted-test` 가 있을 때만 붙는다 — `/pc/` · `/m/` 에는 데모 계정 값이 들어 있지 않다.
 
 자세한 구조와 빌드 방법은 [`apps/demo-web/README.md`](../apps/demo-web/README.md),
 실서버 시연이 어떻게 도는지는 [`demo-target-architecture.md`](demo-target-architecture.md).
@@ -155,7 +157,7 @@ Supabase `videos` 테이블의 `status` · `progress` · `error_message` 를 본
 
 - **실기기에서 서비스워커가 등록되는지.** 스크립트 동작(푸시 수신·알림 탭 라우팅)은
   테스트로 확인했지만, 등록 자체는 내장 브라우저가 막아 검증하지 못했다.
-  배포 후 안드로이드 폰에서 `/m/` 을 열고 알림을 허용해 보면 10초 안에 판별된다.
+  배포 후 안드로이드 폰에서 `/m/`(실서버 시연은 `/wanted-test/m/`)을 열고 알림을 허용해 보면 10초 안에 판별된다.
 - **Cloudflare Worker 실제 배포.** 암호화는 RFC 8291 공식 벡터로 검증했지만
   실제 푸시 서비스에 쏴 본 적은 없다.
 - **`/wanted-test` 를 실제 백엔드로 끝까지.** 계약 모양대로 응답하는 로컬 가짜 서버로는 처음부터 끝까지

@@ -7,7 +7,8 @@
  * 재생하는 동안 조각이 끝날 때마다 그 조각을 실제 서버(POST /v1/segments)로 올린다.
  *
  *   레포루트/public/demo-video/*.mp4          ← 사람이 넣는 원본
- *   apps/demo-web/.generated/demo-video/      ← 이 스크립트의 출력 (gitignore, vite publicDir)
+ *   apps/demo-web/.generated/wanted-test/demo-video/  ← 이 스크립트의 출력 (gitignore, vite publicDir)
+ *                                                → 배포에서는 /wanted-test/demo-video/ (실서버 시연만 쓴다)
  *     manifest.json
  *     demo-<해시>/full.mp4                     화면에 트는 영상 (조각과 같은 인코딩)
  *     demo-<해시>/seg-000.mp4 …                서버로 올리는 조각
@@ -33,7 +34,9 @@ const repo = resolve(demoWeb, '../..')
 const require = createRequire(import.meta.url)
 
 export const DEFAULT_SOURCE_DIR = resolve(repo, 'public/demo-video')
-export const OUTPUT_DIR = resolve(demoWeb, '.generated/demo-video')
+export const OUTPUT_DIR = resolve(demoWeb, '.generated/wanted-test/demo-video')
+/** 예전 출력 위치 (배포의 /demo-video/). 남아 있으면 그대로 배포에 실리므로 지운다. */
+const LEGACY_OUTPUT_DIR = resolve(demoWeb, '.generated/demo-video')
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.mkv', '.webm', '.avi'])
 
@@ -202,6 +205,7 @@ export const buildDemoVideos = ({
   encoding = encodingFromEnv(),
   log = console.log,
 } = {}) => {
+  if (outputDir === OUTPUT_DIR) rmSync(LEGACY_OUTPUT_DIR, { recursive: true, force: true })
   mkdirSync(outputDir, { recursive: true })
   const sources = listSourceVideos(sourceDir)
   log(`시연 영상: ${sources.length}개 (${sourceDir})`)

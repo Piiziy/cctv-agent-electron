@@ -54,8 +54,11 @@
   화면을 열어 둔 동안만)를 그대로 적는다. 예전에는 웹에서 "푸시를 받을 수 없습니다"라고만 했다.
 - **탭 '기록' 배지** — 처리하거나 새 경고가 와도 그대로였다. 처리 직후, 실서버 시연 중에는 10초마다 다시 읽는다.
 - **수면 시간이 비어 있는 새 매장** — `--:--–--:--` 대신 '정하지 않음', 처음 누르면 01:00–07:00 에서 시작.
-- **홈 화면에 추가할 때의 앱 이름** — 실서버 시연용 웹앱 정보(`public/manifest-live.webmanifest`)의 이름이
-  '씬스틸러 실서버 시연'이었다. 시연도 실제 앱과 똑같이 보여야 해서 '씬스틸러'로.
+- **홈 화면에 추가할 때의 앱 이름** — 실서버 시연용 웹앱 정보의 이름이 '씬스틸러 실서버 시연'이었다.
+  시연도 실제 앱과 똑같이 보여야 해서 따로 두던 파일을 없애고 `public/manifest.webmanifest`('씬스틸러') 하나를 쓴다.
+- **데모 계정은 주소에 `/wanted-test` 가 있을 때만** — 예전에는 `?live=1` 을 붙이면(한 번 연 브라우저는
+  붙이지 않아도) 어느 주소에서든 데모 계정으로 들어갔다. 이제 실서버 시연은 따로 구운 `/wanted-test/m/` 빌드이고
+  (`EXPO_PUBLIC_LIVE_MODE=1`, `src/lib/config.ts`), `/m/` 빌드에는 데모 계정 값이 들어 있지 않다.
 
 ## 아침에 5분 안에 해 볼 것
 
@@ -162,7 +165,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 - iOS 시뮬레이터(iPhone 17 Pro, iOS 26.3)에서 Expo Go 로 네이티브 실행 — 번들 3.9초, 로그인 화면 정상.
 - `node tools/send-push.mjs` 의 요청 경로. Expo 푸시 API 가 요청을 받아
   없는 토큰에 `DeviceNotRegistered` 를 돌려주는 것까지 확인했다.
-- 실서버 시연(`/m/?live=1`)을 로컬 가짜 백엔드(`apps/demo-web/scripts/stub-backend.mjs`)로 끝까지 —
+- 실서버 시연(`/wanted-test/m/`)을 로컬 가짜 백엔드(`apps/demo-web/scripts/stub-backend.mjs`)로 끝까지 —
   노트북 PC 화면의 조각 업로드 → 위험 경고 → 휴대폰 목록 · 상세(클립 재생) → '확인했어요' → PC 경고가 닫히고
   탭 배지가 사라짐. 휴대폰 폭 390 · 360 에서 봤다 (2026-09-19).
 - 유닛 테스트 64개 (`npm test -w scene-stealer-mobile` 37, `npm test -w @scene-stealer/api` 27).

@@ -8,18 +8,21 @@
 ```
 dist/              가짜 서버 데모 셸 (/index.html — 배포에서는 / 가 /wanted-test 로 넘어간다)
 dist/wanted-test/  실서버 시연 셸 (/wanted-test) — 대회 제출용 주소
-dist/pc/           매장 PC 수집기 화면  ← apps/pc 렌더러를 브라우저용으로 빌드
-dist/m/            사장님 모바일 앱     ← apps/mobile 의 Expo 웹 빌드
-dist/demo-video/   시연 영상 + 30초 조각 ← 레포루트/public/demo-video 원본을 빌드가 자른다
+dist/pc/  dist/m/              가짜 서버 데모의 PC 화면 · 사장님 앱 (데모 계정 값이 없다)
+dist/wanted-test/pc/           실서버 시연의 매장 PC 화면  ← apps/pc 렌더러를 브라우저용으로 빌드
+dist/wanted-test/m/            실서버 시연의 사장님 앱     ← apps/mobile 의 Expo 웹 빌드
+dist/wanted-test/demo-video/   시연 영상 + 30초 조각       ← 레포루트/public/demo-video 원본을 빌드가 자른다
 ```
 
 같은 출처에 올라가야 셸이 iframe 안의 PC 앱을 직접 조종할 수 있다.
 
 ## 실서버 시연 (/wanted-test)
 
-셸이 PC 앱을 `?live=1` 로 창 가득 띄운다. 그러면 PC 앱이 데모 계정으로 **실제 백엔드**에 로그인하고,
+셸이 PC 앱의 실서버 빌드(`/wanted-test/pc/`)를 창 가득 띄운다. 그러면 PC 앱이 데모 계정으로 **실제 백엔드**에 로그인하고,
 `public/demo-video` 의 영상을 카메라 삼아 30초 조각을 `POST /v1/segments` 로 올린다. 경고는 서버 AI 가
-판정한 것만 뜬다. 휴대폰으로 열면 `/m/?live=1`(사장님 앱)로 넘어간다 — 같은 데모 계정으로 열린다.
+판정한 것만 뜬다. 휴대폰으로 열면 `/wanted-test/m/`(사장님 앱)로 넘어간다 — 같은 데모 계정으로 열린다.
+**데모 계정은 주소에 `/wanted-test` 가 있을 때만 붙는다.** 앱을 두 벌씩 구워 데모 계정 값(LIVE_*)은
+`/wanted-test/` 아래 빌드에만 넣는다. `/pc/` · `/m/` 은 무엇을 붙여 열어도(예전의 `?live=1`) 가짜 서버 데모다.
 셸은 설명 · 진행 표시 · QR 을 덧붙이지 않는다. 직접 그리는 것은 시작하지 못했을 때의 이유뿐이다.
 
 설정은 `LIVE_*` 환경변수다 (아래 표). 백엔드 CORS 는 같은 최상위 도메인의 https 페이지만 받으므로,
@@ -27,7 +30,7 @@ dist/demo-video/   시연 영상 + 30초 조각 ← 레포루트/public/demo-vid
 흐름·남은 작업은 [`docs/demo-target-architecture.md`](../../docs/demo-target-architecture.md).
 
 ```bash
-node scripts/demo-video.mjs                       # 영상만 미리 잘라 보기 → .generated/demo-video/
+node scripts/demo-video.mjs                       # 영상만 미리 잘라 보기 → .generated/wanted-test/demo-video/
 npm run build -w @scene-stealer/demo-web          # 전체 굽기
 npm run preview -w @scene-stealer/demo-web        # 구운 것 띄우기 → http://localhost:4173/wanted-test/
 ```
@@ -47,7 +50,7 @@ node apps/demo-web/scripts/stub-backend.mjs          # :8787 — 첫 조각에�
 npm run preview -w @scene-stealer/demo-web           # http://localhost:4173/wanted-test/
 ```
 
-휴대폰 화면은 같은 주소를 휴대폰 크기 창(개발자 도구의 기기 흉내)으로 열면 `/m/?live=1` 로 넘어간다.
+휴대폰 화면은 같은 주소를 휴대폰 크기 창(개발자 도구의 기기 흉내)으로 열면 `/wanted-test/m/` 로 넘어간다.
 이 빌드는 가짜 백엔드를 가리키니 배포하지 않는다 — Vercel 은 저장소를 새로 굽는다.
 
 ## 가짜 서버 데모 동선 (/index.html)
@@ -104,9 +107,9 @@ Vercel 에서 이 저장소를 Import 할 때 **Root Directory 를 비워 두기
 Root Directory 를 `apps/pc` 같은 하위 폴더로 잡으면 안 된다 — PC 앱만 나오고
 데모 셸과 모바일 앱이 빠진다. 워크스페이스라 설치도 루트에서 해야 한다.
 
-`vercel.json` 의 rewrite 는 모바일 앱이 SPA 라서 있다. `/m/` 아래 경로는 실제 파일이
-없으면 `index.html` 로 넘겨야 라우터가 받는다 (실제 파일이 있으면 그게 먼저 나간다).
-`/wanted-test` (끝에 `/` 없이) 도 같은 식으로 `wanted-test/index.html` 로 넘긴다.
+`vercel.json` 의 rewrite 는 모바일 앱이 SPA 라서 있다. `/m/` · `/wanted-test/m/` 아래 경로는 실제 파일이
+없으면 각자의 `index.html` 로 넘겨야 라우터가 받는다 (실제 파일이 있으면 그게 먼저 나간다).
+`/wanted-test` · `/wanted-test/pc` · `/wanted-test/m` (끝에 `/` 없이) 도 같은 식으로 각자의 `index.html` 로 넘긴다.
 루트 `/` 는 redirect 로 `/wanted-test` 에 보낸다 — 가짜 서버 데모는 `/index.html` 로만 남는다.
 
 ### GitHub Pages 로 가야 한다면

@@ -23,6 +23,11 @@ AI 가 위험으로 판정하면 → PC 경고(실시간 채널) + 열어 둔 �
 경고는 서버 AI 가 판정한 것만 뜬다. 루트 `/` 는 `/wanted-test` 로 넘어간다 — 예전 가짜 서버 데모는
 `/index.html` 로만 남아 있다.
 
+**데모 계정은 주소에 `/wanted-test` 가 있을 때만 붙는다** (2026-09-19). PC·휴대폰 앱을 두 벌씩 굽는다 —
+실서버용은 `/wanted-test/pc/` · `/wanted-test/m/` 에 두고 데모 계정 값(LIVE_*)은 이 빌드에만 넣는다.
+`/pc/` · `/m/` 은 가짜 서버 데모 빌드라 어떤 주소로 열어도(예전의 `?live=1`) 데모 계정에 닿지 않는다.
+시연 영상도 `/wanted-test/demo-video/` 에 있다 (`scripts/build-all.mjs`).
+
 화면도 실제 앱 그대로다 (2026-09-19). 시연용 설명 · 진행 표시 · QR 을 덧붙이지 않는다. 컴퓨터로 열면
 매장 PC 앱이 창을 가득 채우고, 휴대폰으로 열면 사장님 앱으로 넘어간다. 휴대폰 알림 권한은 첫 탭에
 브라우저 기본 창으로만 묻는다.
@@ -43,9 +48,9 @@ RTSP 가 필요 없다. 에이전트가 할 "자르기"를 빌드 때 미리 해
 | 조각 | 어디 | 하는 일 |
 |---|---|---|
 | 영상 자르기 | `apps/demo-web/scripts/demo-video.mjs` | `public/demo-video/*.mp4` → 480p · 원본 fps(최대 30) · 30초 H.264 조각 + 목록(manifest). 빌드 때 돈다 |
-| 셸 | `apps/demo-web/wanted-test/` · `src/live.ts` | PC 앱을 창 가득(iframe `/pc/?live=1`, 창이 앱 최소 크기 1180×720 보다 작으면 통째로 줄인다). 휴대폰이면 `/m/?live=1` 로 넘긴다. 직접 그리는 것은 시작하지 못한 이유뿐 |
+| 셸 | `apps/demo-web/wanted-test/` · `src/live.ts` | PC 앱을 창 가득(iframe `/wanted-test/pc/`, 창이 앱 최소 크기 1180×720 보다 작으면 통째로 줄인다). 휴대폰이면 `/wanted-test/m/` 로 넘긴다. 직접 그리는 것은 시작하지 못한 이유뿐 |
 | PC 화면 | `apps/pc/src/renderer/lib/live/` | `live-api.ts` — 데모 계정 로그인 · 매장 찾기 · 카메라 등록 · 하트비트 · 실시간 채널. `collector.ts` — 조각 업로드 |
-| 모바일 | `apps/mobile/src/lib/config.ts` 외 | `?live=1` 감지(브라우저에 기억), 데모 계정 자동 로그인, 페이지가 열려 있는 동안 10초마다 새로 읽고 새 경고는 휴대폰 알림으로 |
+| 모바일 | `apps/mobile/src/lib/config.ts` 외 | 실서버 빌드(`/wanted-test/m/`)는 데모 계정 자동 로그인, 페이지가 열려 있는 동안 10초마다 새로 읽고 새 경고는 휴대폰 알림으로 |
 | 설정 | `apps/demo-web/scripts/build-all.mjs` | `LIVE_*` 환경변수를 앱마다 넘긴다. 절차는 [`demo-submission.md`](demo-submission.md) |
 
 서버 호출·실시간 채널·하트비트는 **매장 PC 앱의 메인 프로세스 모듈을 그대로** 쓴다 (전부 fetch 만 써서
