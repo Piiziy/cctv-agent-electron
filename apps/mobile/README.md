@@ -57,8 +57,9 @@
 - **글꼴** — 디자인시스템 2장대로 본문은 Pretendard, 로고 글자만 Prompt Bold. 웹은 `public/fonts` 에 실어
   둔 글꼴을 쓴다 (Pretendard 는 한글을 조각낸 dynamic subset 판이라 화면에 나온 글자 조각만 받는다).
   네이티브 앱에는 아직 글꼴 파일을 싣지 않아 시스템 글꼴이다 (`src/lib/typography.ts`). 한글은 어절 단위로 줄을 바꾼다.
-- **아이콘 · 그림** — 아이콘 묶음 의존성 없이 SVG 로 그렸다 (`src/components/icons.tsx`; 카드 바탕 그라디언트와
-  CCTV 그림은 `src/components/art.tsx`). expo-image 가 웹 · 네이티브 모두 SVG 를 그린다.
+- **아이콘 · 그림** — 아이콘은 묶음 의존성 없이 SVG 로 그렸다 (`src/components/icons.tsx`, 카드 바탕 그라디언트는
+  `src/components/art.tsx`). expo-image 가 웹 · 네이티브 모두 SVG 를 그린다. 홈 안내 카드의 CCTV 는 디자인에서 받은
+  그림(`assets/images/cctv.png`, 95×81 · 둘레 9 투명)을 원래 크기로 놓는다.
 - **입력 칸 포커스** — 브라우저의 검은 테두리 대신 디자인의 파란 테두리.
 - **넓은 창** — 컴퓨터로 열어도 휴대폰 폭(430)으로 가운데 그린다.
 
