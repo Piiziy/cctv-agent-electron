@@ -1,6 +1,6 @@
 import type {
   EventDetail, EventListItem, EventState, EventsPage, ListEventsQuery, Monitoring, NearbyCamera,
-  NotificationSettings, SceneStealerApi, Store, TimelineCamera,
+  NotificationSettings, SceneStealerApi, Store, TimelineCamera, WeeklySummaryDto,
 } from './types'
 
 export interface ApiClientOptions {
@@ -64,6 +64,7 @@ export const createApiClient = (options: ApiClientOptions): SceneStealerApi => {
       })).event,
     getUnconfirmedCount: async (storeId, scope = 'today') =>
       (await call<{ count: number }>(`/stores/${storeId}/events/unconfirmed-count${query({ scope })}`)).count,
+    getWeeklySummary: (storeId) => call<WeeklySummaryDto>(`/stores/${storeId}/events/summary`),
     getTimeline: async (storeId, date) =>
       (await call<{ cameras: TimelineCamera[] }>(`/stores/${storeId}/events/timeline${query({ date })}`)).cameras,
     getNearbyCameras: async (eventId) =>

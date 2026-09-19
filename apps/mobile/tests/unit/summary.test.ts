@@ -37,7 +37,9 @@ describe('주간 요약', () => {
       NOW,
     )
     expect(three.repeatedHour).toBe(1)
-    expect(repeatLine(three)).toBe('주로 새벽 1시대에 반복됐습니다')
+    // 2026-09-11 은 금요일 — 1·2·3일 전은 목 · 수 · 화. 요일은 월요일부터 적는다.
+    expect(three.repeatedDays).toEqual([2, 3, 4])
+    expect(repeatLine(three)).toBe('주로 화, 수, 목 새벽 1시대에 반복됨')
   })
 
   it('기록이 없으면 0건 — 없는 숫자를 지어내지 않는다', () => {

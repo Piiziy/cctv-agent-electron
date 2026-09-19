@@ -5,7 +5,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import iconUser from '../assets/icon-user-dark.svg'
-import logoMark from '../assets/logo-mark-navy.svg'
+// 로고 마크 — 남색 S 에 오른쪽 위 모서리 · 왼쪽 삼각형만 로고 노랑(#F9A403, 디자인시스템 1장).
+import logoMark from '../assets/logo-mark-color.svg'
 import { cn } from '../lib/cn'
 
 interface TopNavProps {

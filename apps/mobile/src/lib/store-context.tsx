@@ -44,7 +44,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     void refresh()
   }, [refresh])
 
-  // 실서버 시연 — 새 경고가 오면 탭 배지(미확인 수)도 따라가야 한다. 홈이 목록을 다시 읽는 간격(10초)과 같다.
+  // 실서버 시연 — 매장 칩의 빨간 점(PC 꺼짐) · 설정의 매장 줄이 지금 상태를 따라가게 다시 읽는다. 홈이 목록을 다시 읽는 간격(10초)과 같다.
   useEffect(() => {
     if (!config.live || !session) return
     const timer = setInterval(() => void refresh({ silent: true }), 10_000)

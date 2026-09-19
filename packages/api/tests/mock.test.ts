@@ -116,4 +116,35 @@ describe('가짜 서버 — 응답 모양은 진짜 서버와 같다', () => {
     expect(updated).not.toHaveProperty('anomalyScore')
     expect(updated).not.toHaveProperty('clipUrl')
   })
+
+  it('목록은 매번 새 객체다 — 상태를 바꿔도 화면이 들고 있던 객체는 그대로다', async () => {
+    const mock = api()
+    const { items } = await mock.listEvents('store-gangnam')
+    const held = items.find((e) => e.id === 'ev-1')!
+    await mock.setEventState('ev-1', 'confirmed')
+    // 안쪽 객체를 그대로 주면 여기서 held.state 도 바뀐다. 그러면 객체가 같다고 다시 그리지 않는
+    // React Compiler 가 옛 글자('미확인')를 그대로 두었다 (카드는 흐려졌는데 글자는 '미확인').
+    expect(held.state).toBe('unconfirmed')
+    const again = await mock.listEvents('store-gangnam')
+    expect(again.items.find((e) => e.id === 'ev-1')!.state).toBe('confirmed')
+  })
+})
+
+describe('가짜 서버 — 이번 주 요약', () => {
+  it('오탐까지 센 수(total) · 오탐 · 메모가 남은 수(신고)를 준다', async () => {
+    const mock = api()
+    const before = await mock.getWeeklySummary('store-gangnam')
+    expect(before.total).toBeGreaterThan(before.falsePositive)
+    expect(before.reported).toBe(0)
+    await mock.setEventMemo('ev-1', '112 접수 2026-0911-001')
+    await mock.setEventState('ev-2', 'false_positive')
+    const after = await mock.getWeeklySummary('store-gangnam')
+    expect(after.reported).toBe(1)
+    expect(after.falsePositive).toBe(before.falsePositive + 1)
+    expect(after.total).toBe(before.total)
+  })
+
+  it('다른 매장은 0 — 남의 기록을 세지 않는다', async () => {
+    expect(await api().getWeeklySummary('store-yeoksam')).toEqual({ total: 0, falsePositive: 0, reported: 0 })
+  })
 })

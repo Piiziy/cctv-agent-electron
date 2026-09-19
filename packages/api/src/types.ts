@@ -122,6 +122,16 @@ export interface NotificationSettings {
   readonly quietHours: QuietHours
 }
 
+/**
+ * 주간 요약 (계약 5.8) — 기록 화면의 '이번 주 요약'. 기간을 안 주면 서버가 최근 7일로 센다.
+ * total 은 오탐까지 센 수, reported 는 112 접수번호 같은 메모가 남은 수(신고 흔적)다.
+ */
+export interface WeeklySummaryDto {
+  readonly total: number
+  readonly falsePositive: number
+  readonly reported: number
+}
+
 export interface EventsPage {
   readonly items: readonly EventListItem[]
   readonly nextCursor: string | null
@@ -155,6 +165,7 @@ export interface SceneStealerApi {
   setEventMemo(eventId: string, memo: string): Promise<EventListItem & { readonly memo: string | null }>
   getUnconfirmedCount(storeId: string, scope?: 'today' | 'all'): Promise<number>
   getTimeline(storeId: string, date: string): Promise<readonly TimelineCamera[]>
+  getWeeklySummary(storeId: string): Promise<WeeklySummaryDto>
   getNearbyCameras(eventId: string): Promise<readonly NearbyCamera[]>
   getNotificationSettings(storeId: string): Promise<NotificationSettings>
   putNotificationSettings(storeId: string, settings: NotificationSettings): Promise<NotificationSettings>

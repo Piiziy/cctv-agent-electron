@@ -44,6 +44,19 @@ export const type = Object.fromEntries(
 ) as { readonly [K in TypeName]: (typeof tokenType)[K] & TextStyle }
 
 /**
+ * 피그마 모바일 화면의 글자 — 크기 · 굵기만 주면 글꼴 · 자간(-0.01em) · 숫자 폭을 붙인다.
+ * 줄 높이는 한 줄 글자가 칸 가운데 오도록 크기의 1.4배로 둔다.
+ */
+export const font = (fontSize: number, fontWeight: TextStyle['fontWeight'] = '400'): TextStyle => ({
+  ...bodyFont,
+  fontSize,
+  fontWeight,
+  lineHeight: Math.round(fontSize * 1.4),
+  letterSpacing: -0.01 * fontSize,
+  fontVariant: ['tabular-nums'],
+})
+
+/**
  * 웹 글꼴을 문서에 건다. 첫 화면이 그려지기 전에 부르도록 앱 진입점(_layout)의 맨 위에서 부른다.
  * 글꼴이 늦게 와도 글자는 먼저 시스템 글꼴로 보인다 (font-display: swap).
  */
@@ -59,8 +72,8 @@ export const installWebFonts = (): void => {
   const style = document.createElement('style')
   style.textContent = [
     `@font-face{font-family:Prompt;font-style:normal;font-weight:700;font-display:swap;src:url(${base}/fonts/prompt/prompt-latin-700-normal.woff2) format('woff2')}`,
-    // 입력 칸·버튼처럼 앱 글꼴을 따로 주지 않은 요소도 같은 글꼴로.
-    `html,body{font-family:${BODY_STACK};-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}`,
+    // 입력 칸·버튼처럼 앱 글꼴을 따로 주지 않은 요소도 같은 글꼴로. 한글은 어절 단위로 줄을 바꾼다 ('숫자 6|자리' 처럼 끊기지 않게).
+    `html,body{font-family:${BODY_STACK};-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;word-break:keep-all;overflow-wrap:break-word}`,
   ].join('\n')
   document.head.appendChild(style)
 }

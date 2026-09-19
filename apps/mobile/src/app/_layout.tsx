@@ -4,12 +4,13 @@ import { Stack, router, useRootNavigationState, useSegments } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { colors, lightTokens } from '@scene-stealer/tokens'
+import { lightTokens } from '@scene-stealer/tokens'
 import { WEB_FRAME_WIDTH } from '../components/ui'
 import { ApiProvider } from '../lib/api'
 import { config } from '../lib/config'
 import { eventIdFrom, pushSupported } from '../lib/notifications'
 import { askNotificationsOnFirstTap, installWebAppManifest, isWeb, onNotificationOpen } from '../lib/web-push'
+import { palette } from '../lib/palette'
 import { SessionProvider, useSession } from '../lib/session'
 import { StoreProvider } from '../lib/store-context'
 import { installWebFonts } from '../lib/typography'
@@ -105,12 +106,12 @@ export default function RootLayout() {
 }
 
 /**
- * 웹을 넓은 창(컴퓨터)으로 열어도 휴대폰 화면처럼 보이게, 가운데에 휴대폰 폭(480)으로 둔다.
+ * 웹을 넓은 창(컴퓨터)으로 열어도 휴대폰 화면처럼 보이게, 가운데에 휴대폰 폭(430)으로 둔다.
  * 사장님 앱은 휴대폰 앱이다 — 1280 폭으로 늘어난 카드는 이 앱이 아니다. 네이티브는 그대로 화면 가득.
  */
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: isWeb ? lightTokens['gray-200'] : colors.surface },
+  page: { flex: 1, backgroundColor: isWeb ? lightTokens['gray-200'] : palette.page },
   frame: isWeb
-    ? { flex: 1, width: '100%', maxWidth: WEB_FRAME_WIDTH, alignSelf: 'center', overflow: 'hidden', backgroundColor: colors.surface }
+    ? { flex: 1, width: '100%', maxWidth: WEB_FRAME_WIDTH, alignSelf: 'center', overflow: 'hidden', backgroundColor: palette.page }
     : { flex: 1 },
 })

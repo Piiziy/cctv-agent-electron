@@ -182,7 +182,9 @@ export const createMockApi = (options: MockOptions = {}): SceneStealerApi => {
           (!q.risk || e.risk === q.risk) &&
           (!q.state || e.state === q.state),
       )
-      return { items: sortForList(filtered), nextCursor: null }
+      // 진짜 서버처럼 매번 새 객체를 준다. 안쪽 객체를 그대로 주면 상태를 바꿀 때 화면이 들고 있던 객체까지
+      // 바뀌어, 객체가 같으면 다시 그리지 않는 React Compiler 가 옛 글자('미확인')를 그대로 둔다.
+      return { items: sortForList(filtered).map((item) => ({ ...item })), nextCursor: null }
     },
 
     getEvent: async (eventId) => {
@@ -213,6 +215,18 @@ export const createMockApi = (options: MockOptions = {}): SceneStealerApi => {
       return state.events.filter((e) => e.state === 'unconfirmed').length
     },
 
+    getWeeklySummary: async (storeId) => {
+      await wait()
+      if (storeId !== 'store-gangnam') return { total: 0, falsePositive: 0, reported: 0 }
+      const since = Date.now() - 7 * 86_400_000
+      const week = state.events.filter((e) => Date.parse(e.startedAt) >= since)
+      return {
+        total: week.length,
+        falsePositive: week.filter((e) => e.state === 'false_positive').length,
+        reported: week.filter((e) => (e.memo ?? '').trim() !== '').length,
+      }
+    },
+
     getTimeline: async (storeId, date) => {
       await wait()
       if (storeId !== 'store-gangnam') return []
@@ -234,7 +248,8 @@ export const createMockApi = (options: MockOptions = {}): SceneStealerApi => {
       const item = find(eventId)
       return CAMERAS.filter((c) => c.id !== item.cameraId && c.id !== 'cam-stock').map<NearbyCamera>((c) => ({
         cameraId: c.id, name: c.name,
-        playbackUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+        // 가짜 서버에는 다른 카메라 영상이 따로 없다 — 같은 예제 영상을 튼다.
+        playbackUrl: clipUrl,
         offsetSec: 12.4,
       }))
     },
