@@ -3,7 +3,7 @@
  * PC 앱은 사이드바 대신 이걸 쓴다 (디자인시스템 4장). 높이 76.
  */
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import iconUser from '../assets/icon-user-dark.svg'
 // 로고 마크 — 남색 S 에 오른쪽 위 모서리 · 왼쪽 삼각형만 로고 노랑(#F9A403, 디자인시스템 1장).
 import logoMark from '../assets/logo-mark-color.svg'
@@ -62,7 +62,9 @@ export const TopNav = ({ storeName, unconfirmedCount, userLabel, onSignOut }: To
       )}
     >
       <div className="flex items-center gap-12">
-        <Logo />
+        <Link to="/live" aria-label="실시간 화면으로 이동">
+          <Logo />
+        </Link>
         <nav className="flex gap-9 text-[18px] font-semibold text-gray-900">
           {MENU.map((item) => (
             <NavLink
