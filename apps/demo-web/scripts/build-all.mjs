@@ -153,6 +153,10 @@ buildMobile(liveMobileOut, `${base}wanted-test/m`, {
 const clipsSrc = resolve(repo, 'apps/mobile/public/clips')
 if (existsSync(clipsSrc)) cpSync(clipsSrc, resolve(dist, 'clips'), { recursive: true })
 
+// 카톡·슬랙 링크 미리보기용 로고. index.html 들의 og:image 가 도메인 루트의 이 파일을 가리킨다.
+const ogImageSrc = resolve(demoWeb, 'assets/og-image.jpg')
+if (existsSync(ogImageSrc)) cpSync(ogImageSrc, resolve(dist, 'og-image.jpg'))
+
 // 3. 데모 셸.
 runBin(demoWeb, 'vite', ['build'], {
   env: { ...process.env, DEMO_BASE: base, VITE_PUSH_ENDPOINT: pushEndpoint },
