@@ -9,3 +9,6 @@ release/
 spool/
 .tmp/
 .turbo/
+
+# Vercel CLI 가 `vercel link` 때 만드는 프로젝트 연결 정보
+.vercel/

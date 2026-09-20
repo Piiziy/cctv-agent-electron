@@ -56,7 +56,29 @@ export default defineConfig(() => ({
   },
   // `vite preview` 는 굽힌 dist 를 그대로 보여 줘야 한다. 비워 두지 않으면 위 개발용 프록시를
   // 물려받아 /pc · /m 을 떠 있지도 않은 개발 서버로 보낸다 (500).
-  preview: { proxy: {} },
+  //
+  // 예외가 하나. `npm run wanted -- --live` 는 로컬에서 진짜 백엔드를 본다. 브라우저가 직접 부르면
+  // CORS 에 막히므로(백엔드는 https://*.scene-stealer.site 만 받는다) 이 서버가 대신 불러다 준다 —
+  // 브라우저에게는 같은 출처다. 그때만 WANTED_LIVE_API 에 진짜 백엔드 주소가 들어온다.
+  preview: {
+    proxy: process.env.WANTED_LIVE_API
+      ? {
+          '/live-api': {
+            target: process.env.WANTED_LIVE_API,
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/live-api/, ''),
+            // 실시간 채널(SSE)은 끊기지 않고 흘러야 한다. 가운데서 묶어 두면 경고가 늦게 뜬다.
+            configure: (proxy) => {
+              proxy.on('proxyRes', (proxyRes) => {
+                if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
+                  proxyRes.headers['cache-control'] = 'no-cache, no-transform'
+                }
+              })
+            },
+          },
+        }
+      : {},
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: false,

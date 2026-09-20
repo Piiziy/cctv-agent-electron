@@ -107,3 +107,52 @@ describe('푸시 기기', () => {
     expect(calls[0]!.init.method).toBe('DELETE')
   })
 })
+
+describe('거절당한 토큰 (401)', () => {
+  /** 토큰을 바꿔 가며 답하는 서버. 'new' 만 받아 준다. */
+  const serverThatOnlyTakes = (good: string) => {
+    const calls: { url: string; auth: string | undefined }[] = []
+    const fetchImpl = (async (url: string, init: RequestInit = {}) => {
+      const auth = (init.headers as Record<string, string> | undefined)?.authorization
+      calls.push({ url, auth })
+      return auth === `Bearer ${good}`
+        ? ({ ok: true, status: 200, json: async () => ({ stores: [] }) } as Response)
+        : ({ ok: false, status: 401, json: async () => ({ error: { code: 'unauthorized', message: '로그인이 필요합니다' } }) } as Response)
+    }) as unknown as typeof fetch
+    return { calls, fetchImpl }
+  }
+
+  it('새 토큰을 받아 그 요청만 다시 보낸다', async () => {
+    const { calls, fetchImpl } = serverThatOnlyTakes('new')
+    const api = createApiClient({
+      baseUrl: 'https://api.example.com',
+      getToken: async () => 'old',
+      renewToken: async () => 'new',
+      fetchImpl,
+    })
+
+    await expect(api.listStores()).resolves.toEqual([])
+    expect(calls.map((call) => call.auth)).toEqual(['Bearer old', 'Bearer new'])
+  })
+
+  it('같은 토큰을 돌려주면 다시 보내지 않는다', async () => {
+    const { calls, fetchImpl } = serverThatOnlyTakes('new')
+    const api = createApiClient({
+      baseUrl: 'https://api.example.com',
+      getToken: async () => 'old',
+      renewToken: async () => 'old',
+      fetchImpl,
+    })
+
+    await expect(api.listStores()).rejects.toBeInstanceOf(ApiError)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('다시 받아 올 곳이 없으면 401 을 그대로 올린다', async () => {
+    const { calls, fetchImpl } = serverThatOnlyTakes('new')
+    const api = createApiClient({ baseUrl: 'https://api.example.com', getToken: async () => 'old', fetchImpl })
+
+    await expect(api.listStores()).rejects.toMatchObject({ status: 401, code: 'unauthorized' })
+    expect(calls).toHaveLength(1)
+  })
+})

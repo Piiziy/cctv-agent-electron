@@ -27,6 +27,7 @@ import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { EVENT_TITLE, RISK_LABEL, RISK_TONE } from '../../lib/labels'
 import { buildPoliceReport } from '../../lib/police-report'
+import { segmentIn } from '../../lib/segments'
 import {
   changeEventState,
   getClip,
@@ -71,7 +72,7 @@ const SegmentTimeline = ({
   segments,
   event,
   selectedStart,
-  position,
+  playheadAt,
   onPick,
   onShift,
   canGoBack,
@@ -82,18 +83,18 @@ const SegmentTimeline = ({
   segments: readonly SegmentDto[]
   event: EventDetail
   selectedStart: number
-  position: number
+  /** 지금 틀고 있는 지점 (epoch ms). 조각이 칸보다 늦게 시작하므로 칸 시작으로는 셀 수 없다. */
+  playheadAt: number
   onPick: (start: number) => void
   onShift: (slots: number) => void
   canGoBack: boolean
   canGoForward: boolean
 }) => {
-  const bySlot = new Map(segments.map((segment) => [Date.parse(segment.startedAt), segment]))
   const eventStart = Date.parse(event.startedAt)
   const eventEnd = Date.parse(event.endedAt)
   const windowStart = slotStarts[0] ?? 0
   const windowMs = segmentMs * SLOTS
-  const playhead = ((selectedStart + position * 1000 - windowStart) / windowMs) * 100
+  const playhead = ((playheadAt - windowStart) / windowMs) * 100
   // 눈금은 칸의 경계(칸 수 + 1)다 — 칸 시작만 찍으면 맨 오른쪽 글자가 마지막 칸의 '시작'인데 '끝' 자리에 선다.
   // 조각이 분 단위가 아니면(웹 체험판 30초) 시·분만으로는 이웃 눈금이 같은 글자가 되므로 초까지 적는다.
   const ticks = [...slotStarts, windowStart + windowMs]
@@ -108,7 +109,7 @@ const SegmentTimeline = ({
       </div>
       <div className="relative flex h-9 overflow-hidden rounded-small bg-gray-100">
         {slotStarts.map((start, index) => {
-          const segment = bySlot.get(start)
+          const segment = segmentIn(segments, start, start + segmentMs)
           const inSlot = eventStart < start + segmentMs && eventEnd > start
           return (
             <button
@@ -426,16 +427,19 @@ export const EventDetailScreen = () => {
 
   const activeStart = selectedStart ?? eventSlotStart
   const segmentList = segments.data ?? []
-  const activeSegment = segmentList.find((segment) => Date.parse(segment.startedAt) === activeStart) ?? null
+  const activeSegment = segmentIn(segmentList, activeStart, activeStart + segmentMs)
   const cameraName =
     cameras.data?.find((camera) => camera.id === cameraId)?.name ?? event.cameraName ?? '카메라'
   const cameraIndex = Math.max(0, cameras.data?.findIndex((camera) => camera.id === cameraId) ?? 0)
+  // 재생 위치는 칸이 아니라 조각 안에서 센다 — 조각은 칸 중간(13:40:35)에서 시작한다.
+  const segmentStart = activeSegment ? Date.parse(activeSegment.startedAt) : activeStart
+  const playFrom = activeStart === eventSlotStart ? Date.parse(event.startedAt) : activeStart
   const source: MainSource = {
     cameraId: cameraId ?? event.cameraId,
     cameraName,
     url: activeSegment?.playbackUrl ?? null,
-    segmentStartedAt: new Date(activeStart).toISOString(),
-    offsetSec: activeStart === eventSlotStart ? (Date.parse(event.startedAt) - activeStart) / 1000 : 0,
+    segmentStartedAt: new Date(segmentStart).toISOString(),
+    offsetSec: Math.max(0, (playFrom - segmentStart) / 1000),
   }
 
   const ordered = (siblings.data ?? []).toSorted((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
@@ -541,7 +545,7 @@ export const EventDetailScreen = () => {
               segments={segmentList}
               event={event}
               selectedStart={activeStart}
-              position={position}
+              playheadAt={segmentStart + position * 1000}
               onPick={pickSegment}
               onShift={(slots) => setWindowShift((shift) => shift + slots)}
               canGoBack={canGoBack}

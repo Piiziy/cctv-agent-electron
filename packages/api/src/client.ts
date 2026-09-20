@@ -7,6 +7,12 @@ export interface ApiClientOptions {
   readonly baseUrl: string
   /** Supabase 세션 토큰. 없으면 null — 그때는 401 을 그대로 올린다. */
   readonly getToken: () => Promise<string | null>
+  /**
+   * 서버가 토큰을 거절했을 때(401) 새 토큰을 받아 올 곳. 주면 그 요청을 새 토큰으로 한 번 더 보낸다.
+   * 만료 시각만 보고는 알 수 없는 경우가 있다 — 다른 서버에서 받은 토큰을 들고 있거나,
+   * 서버에서 세션이 지워졌을 때다. 그대로 두면 화면이 영영 '불러오는 중'에 머문다.
+   */
+  readonly renewToken?: () => Promise<string | null>
   readonly fetchImpl?: typeof fetch
 }
 
@@ -23,19 +29,24 @@ const query = (params: Record<string, string | number | undefined>): string => {
 }
 
 export const createApiClient = (options: ApiClientOptions): SceneStealerApi => {
+  const send = (path: string, init: RequestInit, token: string | null): Promise<Response> =>
+    (options.fetchImpl ?? fetch)(`${options.baseUrl.replace(/\/+$/, '')}${path}`, {
+      ...init,
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    })
+
   const call = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
     const token = await options.getToken()
-    const response = await (options.fetchImpl ?? fetch)(
-      `${options.baseUrl.replace(/\/+$/, '')}${path}`,
-      {
-        ...init,
-        headers: {
-          'content-type': 'application/json',
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-          ...init.headers,
-        },
-      },
-    )
+    let response = await send(path, init, token)
+    if (response.status === 401 && options.renewToken) {
+      const renewed = await options.renewToken()
+      // 같은 토큰을 다시 받았으면 다시 보내 봐야 또 401 이다.
+      if (renewed && renewed !== token) response = await send(path, init, renewed)
+    }
     if (response.status === 204) return undefined as T
     const body = await response.json().catch(() => null)
     if (!response.ok) {

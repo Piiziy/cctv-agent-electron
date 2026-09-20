@@ -18,12 +18,15 @@ dist/wanted-test/demo-video/   시연 영상 + 30초 조각       ← 레포루�
 
 ## 실서버 시연 (/wanted-test)
 
-셸이 PC 앱의 실서버 빌드(`/wanted-test/pc/`)를 창 가득 띄운다. 그러면 PC 앱이 데모 계정으로 **실제 백엔드**에 로그인하고,
+`/wanted-test` 는 **어느 화면을 볼지 고르는 링크 맵**이다 (2026-09-20). 로고 하나와 버튼 둘뿐이다 —
+`PC 뷰 보기`(`/wanted-test/pc/`) · `모바일 뷰 보기`(`/wanted-test/m/`). 설명 · 진행 표시 · QR 은 없다.
+
+버튼을 누르면 그 앱이 제 주소에서 그대로 뜬다. PC 화면은 데모 계정으로 **실제 백엔드**에 로그인하고,
 `public/demo-video` 의 영상을 카메라 삼아 30초 조각을 `POST /v1/segments` 로 올린다. 경고는 서버 AI 가
-판정한 것만 뜬다. 휴대폰으로 열면 `/wanted-test/m/`(사장님 앱)로 넘어간다 — 같은 데모 계정으로 열린다.
+판정한 것만 뜬다. 시작하지 못하면 앱이 제 화면으로 이유를 말한다 — 셸은 아무것도 덧붙이지 않는다.
+
 **데모 계정은 주소에 `/wanted-test` 가 있을 때만 붙는다.** 앱을 두 벌씩 구워 데모 계정 값(LIVE_*)은
 `/wanted-test/` 아래 빌드에만 넣는다. `/pc/` · `/m/` 은 무엇을 붙여 열어도(예전의 `?live=1`) 가짜 서버 데모다.
-셸은 설명 · 진행 표시 · QR 을 덧붙이지 않는다. 직접 그리는 것은 시작하지 못했을 때의 이유뿐이다.
 
 설정은 `LIVE_*` 환경변수다 (아래 표). 백엔드 CORS 는 같은 최상위 도메인의 https 페이지만 받으므로,
 웹 데모도 그 도메인의 하위 주소(Vercel 사용자 지정 도메인)로 열어야 한다 — `*.vercel.app` 에서는 막힌다.
@@ -66,6 +69,34 @@ npm run preview -w @scene-stealer/demo-web           # http://localhost:4173/wan
 | `http://localhost:4173/wanted-test/m/` | 사장님 휴대폰 화면 — 컴퓨터 창에서도 휴대폰 폭으로 뜬다 |
 
 이 빌드는 가짜 백엔드를 가리키니 배포하지 않는다 — Vercel 은 저장소를 새로 굽는다.
+
+### 로컬에서 진짜 백엔드로 (`--live`)
+
+```bash
+npm run wanted -- --live
+```
+
+가짜 백엔드 대신 진짜 백엔드를 본다. 브라우저는 진짜 백엔드를 직접 부르지 못하므로(위의 CORS)
+미리보기 서버가 `/live-api` 로 대신 넘긴다 — 브라우저에게는 같은 출처다. 앱 코드는 그대로고,
+바뀌는 것은 앱에 넣어 주는 API 주소뿐이다 ([`vite.config.ts`](vite.config.ts) 의 `preview.proxy`).
+
+데모 계정 값은 저장소에 없다. Vercel 프로젝트 **Settings → Environment Variables** 의 같은 이름 값을
+저장소 루트 `.env.local` 에 넣는다 (`.gitignore` 의 `.env.*` 에 걸려 올라가지 않는다). 빠진 값이 있으면
+스크립트가 무엇이 없는지 알려 준다.
+
+```
+LIVE_SUPABASE_URL=...
+LIVE_SUPABASE_ANON_KEY=...
+LIVE_EMAIL=...
+LIVE_PASSWORD=...
+LIVE_DEVICE_TOKEN=...
+LIVE_STORE_ID=...          # 매장이 하나면 비워도 된다
+LIVE_API_URL=...           # 기본값 https://api.scene-stealer.site
+```
+
+이때 올라가는 조각도 생기는 이벤트도 **진짜 데모 매장에 남는다.** 경고는 서버 AI 가 판정한 것만 뜨므로,
+분석이 실패하면 아무 경고도 뜨지 않는다 — 조각별 분석 상태는 `GET /videos` 로 본다
+(`status`: `uploaded` → `processing` → `done` · `failed`).
 
 ## 가짜 서버 데모 동선 (/index.html)
 
