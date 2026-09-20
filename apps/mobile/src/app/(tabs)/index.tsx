@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router'
 import type { EventListItem, Monitoring, MonitoringCamera, Store } from '@scene-stealer/api'
 import { AddChip, Chip, EmptyCard, GUTTER, MoreButton, Screen, SectionHeader } from '../../components/ui'
 import { EventCard } from '../../components/EventRow'
-import { CctvIllustration, Gradient, PINK_SWEEP } from '../../components/art'
+import { CCTV_INSET, CctvIllustration, Gradient, PINK_SWEEP } from '../../components/art'
 import { Icon } from '../../components/icons'
 import { DemoNotice } from '../../components/DemoNotice'
 import { notify } from '../../lib/alert'
@@ -298,5 +298,6 @@ const styles = StyleSheet.create({
   bannerSmall: { ...font(11), lineHeight: 15, color: palette.muted },
   bannerTitle: { ...font(16, '700'), lineHeight: 22, color: palette.navy },
   bannerSub: { ...font(11), lineHeight: 15, color: palette.muted },
-  bannerArt: { position: 'absolute', right: 16, top: 16 },
+  // 피그마: 카메라 오른쪽 끝이 카드 끝에서 17, 위가 16.
+  bannerArt: { position: 'absolute', right: 17 - CCTV_INSET, top: 16 - CCTV_INSET },
 })
