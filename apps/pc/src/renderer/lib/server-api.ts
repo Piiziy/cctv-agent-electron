@@ -167,6 +167,9 @@ export const changeEventState = async (
     })
   ).event
 
+export const deleteEvent = (eventId: string): Promise<null> =>
+  call<null>({ method: 'DELETE', path: `/events/${id(eventId)}` })
+
 export const updateMemo = async (eventId: string, memo: string): Promise<EventListItem> =>
   (
     await call<{ event: EventListItem }>({

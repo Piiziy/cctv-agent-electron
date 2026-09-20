@@ -233,6 +233,7 @@ export type ServerStreamMessage =
   | { readonly type: 'ping'; readonly data: Record<string, never> }
   | { readonly type: 'event.created'; readonly data: EventListItem }
   | { readonly type: 'event.updated'; readonly data: EventListItem }
+  | { readonly type: 'event.deleted'; readonly data: { readonly id: string } }
   | {
       readonly type: 'camera.state'
       readonly data: {

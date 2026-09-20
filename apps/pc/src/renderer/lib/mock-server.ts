@@ -654,6 +654,17 @@ export const createMockServer = ({ demo }: MockServerOptions = {}): MockServer =
       },
     },
     {
+      method: 'DELETE',
+      pattern: /^\/events\/([^/]+)$/,
+      handle: ([, eventId]) => {
+        const current = state.db.events.find((e) => e.id === eventId)
+        if (!current) return fail(404, '이벤트를 찾을 수 없습니다')
+        state.db = { ...state.db, events: state.db.events.filter((e) => e.id !== eventId) }
+        emit({ type: 'event.deleted', data: { id: eventId ?? '' } })
+        return ok(null, 204)
+      },
+    },
+    {
       method: 'PATCH',
       pattern: /^\/events\/([^/]+)\/memo$/,
       handle: ([, eventId], body) => {

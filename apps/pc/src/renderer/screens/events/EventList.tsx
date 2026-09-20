@@ -30,6 +30,7 @@ import { cn } from '../../lib/cn'
 import { EVENT_TITLE, RISK_LABEL, RISK_TONE, STATE_LABEL } from '../../lib/labels'
 import {
   changeEventState,
+  deleteEvent,
   getClip,
   getEvent,
   getSummary,
@@ -258,10 +259,20 @@ const PageButton = ({
 
 /* ---------------------------------------------------------------- 미리보기 */
 
-const Preview = ({ eventId, onChanged }: { eventId: string; onChanged: (event: EventListItem) => void }) => {
+const Preview = ({
+  eventId,
+  onChanged,
+  onDeleted,
+}: {
+  eventId: string
+  onChanged: (event: EventListItem) => void
+  onDeleted: (eventId: string) => void
+}) => {
   const navigate = useNavigate()
   const detail = useResource(() => getEvent(eventId), [eventId])
   const [busy, setBusy] = useState<EventState | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const data = detail.data
 
@@ -276,6 +287,19 @@ const Preview = ({ eventId, onChanged }: { eventId: string; onChanged: (event: E
       setError(decideError instanceof ServerError ? decideError.message : '저장하지 못했습니다.')
     } finally {
       setBusy(null)
+    }
+  }
+
+  const remove = async () => {
+    setDeleting(true)
+    setError(null)
+    try {
+      await deleteEvent(eventId)
+      onDeleted(eventId)
+    } catch (deleteError) {
+      setError(deleteError instanceof ServerError ? deleteError.message : '삭제하지 못했습니다.')
+      setDeleting(false)
+      setConfirmingDelete(false)
     }
   }
 
@@ -344,6 +368,20 @@ const Preview = ({ eventId, onChanged }: { eventId: string; onChanged: (event: E
       </div>
       {error && <Notice tone="bad">{error}</Notice>}
       <MemoBox eventId={eventId} initial={data.memo} />
+      {confirmingDelete ? (
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" disabled={deleting} onClick={() => setConfirmingDelete(false)}>
+            취소
+          </Button>
+          <Button variant="danger" className="flex-1" loading={deleting} onClick={() => void remove()}>
+            삭제
+          </Button>
+        </div>
+      ) : (
+        <Button variant="danger-outline" onClick={() => setConfirmingDelete(true)}>
+          삭제
+        </Button>
+      )}
     </section>
   )
 }
@@ -422,8 +460,24 @@ export const EventList = () => {
     }))
   }
 
+  const remove = (deletedId: string) => {
+    events.mutate((current) => ({
+      ...current,
+      items: current.items.filter((item) => item.id !== deletedId),
+    }))
+    timeline.mutate((current) => ({
+      ...current,
+      cameras: current.cameras.map((camera) => ({
+        ...camera,
+        events: camera.events.filter((item) => item.id !== deletedId),
+      })),
+    }))
+    setSelectedId((current) => (current === deletedId ? null : current))
+  }
+
   useStreamMessages((message) => {
     if (message.type === 'event.updated') replace(message.data)
+    if (message.type === 'event.deleted') remove(message.data.id)
     // 새 이벤트는 정렬·페이지 경계를 바꾼다. 끼워 넣지 않고 지금 보는 날이면 다시 읽는다.
     if (message.type === 'event.created' && isToday) {
       void events.reload()
@@ -575,7 +629,7 @@ export const EventList = () => {
         </section>
 
         {selectedId ? (
-          <Preview eventId={selectedId} onChanged={replace} />
+          <Preview eventId={selectedId} onChanged={replace} onDeleted={remove} />
         ) : (
           <section className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
             <VideoSurface className="rounded-[10px]">선택한 클립 미리보기</VideoSurface>
