@@ -60,11 +60,12 @@ export const useStreamMessages = (handler: Listener): void => {
 /**
  * 팝업으로 띄울 이벤트인가.
  *
- * 위험도 높음만 띄운다. 사장님이 계산대에 서 있는 PC 앞에서 사소한 움직임마다 창이
- * 앞으로 튀어나오면 곧 알림을 끄거나 무시하게 된다 — 그러면 정작 큰 일도 안 본다.
- * 보통·낮음은 피드와 배지로 조용히 쌓인다.
+ * AI 가 위험 신호로 잡은 것은 위험도와 상관없이 띄운다 (디자인 2d — '위험이 생기면 팝업이 덮는다').
+ * 높음만 띄우던 때는 서버가 낮음·보통으로 판정하는 동안 화면에서 아무 일도 일어나지 않아,
+ * 사람이 앞에 있어도 감시가 도는지 알 수 없었다. 창이 뜨는 게 성가시면 설정의
+ * 'PC 팝업 + 소리'를 끈다 — 그때는 피드와 배지만 조용히 갱신된다.
  */
-const shouldPopUp = (event: EventListItem): boolean => event.state === 'unconfirmed' && event.risk === 'high'
+const shouldPopUp = (event: EventListItem): boolean => event.state === 'unconfirmed'
 
 export const StreamProvider = ({ children }: { children: ReactNode }) => {
   const { store } = useSession()
