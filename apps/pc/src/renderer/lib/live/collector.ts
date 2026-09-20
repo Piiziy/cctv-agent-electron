@@ -71,6 +71,8 @@ export interface CollectorDeps {
   readonly deviceId: string
   readonly fetch: typeof fetch
   readonly newSegmentId: () => string
+  /** 처음에 '카메라'로 켜 둘 시연 영상 id들 (manifest.videos 의 부분집합). */
+  readonly activeVideoIds: readonly string[]
   readonly now?: () => number
   readonly sleep?: (ms: number) => Promise<void>
 }
@@ -79,7 +81,11 @@ export interface Collector {
   /** 처음부터 시작한다. 돌고 있었다면 그 시연은 버리고 새로 시작한다. */
   start(): void
   stop(): void
+  /** 지금 '카메라'로 켜져 있는 시연 영상들. */
   readonly cameras: readonly SelectedCamera[]
+  /** 켜 둘 카메라 집합을 바꾼다. 실제로 반영하려면 start() 를 다시 불러야 한다
+   *  (카메라 추가/삭제 위저드가 서버 등록 뒤에 한다). */
+  setActive(videoIds: readonly string[]): void
   status(): AgentStatus
   progress(): LiveProgress
   /** 화면 타일이 틀어야 할 지점(ms). 시작 전이면 0, 끝났으면 영상 끝. */
@@ -169,7 +175,6 @@ export const createCollector = (deps: CollectorDeps): Collector => {
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const videos = deps.manifest.videos
-  const cameras = videos.map(cameraFor)
   const longestMs = videos.reduce((max, video) => Math.max(max, video.durationMs), 0)
 
   const statusListeners = new Set<(status: AgentStatus) => void>()
@@ -187,7 +192,12 @@ export const createCollector = (deps: CollectorDeps): Collector => {
     fatal: null as UploadStatus | null,
     /** 조각 파일은 시연을 다시 해도 같으므로 한 번만 받는다. */
     blobs: new Map<string, Promise<Blob>>(),
+    /** '카메라'로 켜져 있는 시연 영상 id (manifest.videos 의 부분집합) — 카메라 추가/삭제로 바뀐다. */
+    activeIds: new Set<string>(deps.activeVideoIds),
   }
+
+  /** 지금 켜져 있는 시연 영상만. */
+  const activeVideos = (): DemoVideo[] => videos.filter((video) => state.activeIds.has(video.id))
 
   const counterOf = (cameraId: string): CameraCounters => {
     const counter = state.counters.get(cameraId)
@@ -211,7 +221,7 @@ export const createCollector = (deps: CollectorDeps): Collector => {
       state.fatal ?? (all.some((segment) => segment.phase === 'retrying') ? 'retrying' : inFlight.length > 0 ? 'uploading' : 'idle')
 
     const streaming = cameraStreaming()
-    const cameraStatuses: CameraRuntimeStatus[] = videos.map((video) => {
+    const cameraStatuses: CameraRuntimeStatus[] = activeVideos().map((video) => {
       const counter = counterOf(video.id)
       return {
         cameraId: video.id,
@@ -231,7 +241,7 @@ export const createCollector = (deps: CollectorDeps): Collector => {
       upload,
       cameras: cameraStatuses,
       bytesUploadedToday: state.bytesUploaded,
-      spoolLimitBytesPerCamera: spoolLimitPerCamera(DEFAULT_CONFIG.spoolLimitBytes, Math.max(1, videos.length)),
+      spoolLimitBytesPerCamera: spoolLimitPerCamera(DEFAULT_CONFIG.spoolLimitBytes, Math.max(1, activeVideos().length)),
       lastError: state.message,
     }
   }
@@ -312,7 +322,8 @@ export const createCollector = (deps: CollectorDeps): Collector => {
 
   const uploadSegment = async (pass: Pass, video: DemoVideo, index: number): Promise<void> => {
     const segment = video.segments[index]
-    if (!segment || pass.cancelled || state.pass !== pass) return
+    // 예약된 뒤 카메라가 삭제됐을 수 있다 — 그새 빠졌으면 조용히 넘어간다.
+    if (!segment || pass.cancelled || state.pass !== pass || !state.activeIds.has(video.id)) return
     const key = segmentKey(video.id, index)
     const startedAtMs = pass.startedAt + segment.offsetMs
     const segmentId = deps.newSegmentId()
@@ -389,13 +400,30 @@ export const createCollector = (deps: CollectorDeps): Collector => {
   }
 
   return {
-    cameras,
+    get cameras() {
+      return activeVideos().map(cameraFor)
+    },
+
+    setActive: (videoIds) => {
+      state.activeIds = new Set(videoIds)
+    },
 
     start: () => {
       stopPass()
       if (videos.length === 0) {
         state.phase = 'error'
         state.message = '시연 영상이 없습니다. public/demo-video 에 영상을 넣고 다시 배포해 주세요.'
+        state.segments = new Map()
+        emit()
+        return
+      }
+
+      const active = activeVideos()
+      if (active.length === 0) {
+        // 아직 아무 카메라도 추가하지 않았다 — 잘못된 상태가 아니라 정상적인 시작점이다.
+        state.phase = 'idle'
+        state.message = null
+        state.segments = new Map()
         emit()
         return
       }
@@ -407,7 +435,7 @@ export const createCollector = (deps: CollectorDeps): Collector => {
       state.message = null
       state.fatal = null
       state.segments = new Map(
-        videos.flatMap((video) =>
+        active.flatMap((video) =>
           video.segments.map((segment, index): [string, SegmentProgress] => {
             const key = segmentKey(video.id, index)
             return [
@@ -430,7 +458,7 @@ export const createCollector = (deps: CollectorDeps): Collector => {
         ),
       )
 
-      videos.forEach((video) => {
+      active.forEach((video) => {
         video.segments.forEach((segment, index) => {
           const dueIn = segment.offsetMs + segment.durationMs + FINALIZE_MS
           pass.timers.push(setTimeout(() => void uploadSegment(pass, video, index), dueIn))

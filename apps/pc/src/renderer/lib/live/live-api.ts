@@ -8,7 +8,7 @@ import type { ServerStreamMessage, StoreDto } from '../../../shared/server-types
 import { DEFAULT_CONFIG, type AgentConfig, type AgentStatus } from '../../../shared/types'
 import { createCollector, type Collector } from './collector'
 import { liveConfig, missingLiveConfig, type LiveConfig } from './config'
-import { loadManifest, type DemoManifest } from './manifest'
+import { loadManifest, type DemoManifest, type DemoVideo } from './manifest'
 
 /**
  * 실서버 데모의 AgentApi — Electron 의 preload 가 주는 것과 같은 모양이다.
@@ -33,6 +33,23 @@ declare global {
   interface Window {
     __sceneStealerLive?: LiveDemoControl
   }
+}
+
+/**
+ * '카메라 추가' 위저드(AddCamera.tsx)가 쓰는 손잡이 — 시연 영상 풀을 읽기만 한다.
+ * `createLiveApi`(모듈당 한 번, api.ts 가 부른다)의 클로저 밖에서도 풀을 볼 수 있게
+ * 모듈 스코프에 둔다. `AgentApi`(Electron 앱과 공유하는 타입)에는 넣지 않는다 — 이 기능은
+ * 실서버 데모에만 있다.
+ */
+let latestManifest: (() => DemoManifest | null) | null = null
+let latestReady: Promise<LiveBootResult> | null = null
+
+export const liveDemoState = {
+  /** 시연 영상 전체 목록(=카메라 후보 풀). 아직 boot 이 안 끝났으면 빈 배열. */
+  videos: (): readonly DemoVideo[] => latestManifest?.()?.videos ?? [],
+  /** boot 이 끝날 때까지 기다린다. */
+  ready: (): Promise<LiveBootResult> =>
+    latestReady ?? Promise.resolve({ ok: false, message: '아직 시작되지 않았습니다' }),
 }
 
 const SESSION_KEY = 'scene-stealer:live:session'
@@ -172,33 +189,27 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
     }
     state.manifest = manifest
 
-    // 시연 영상을 바꾸면 예전 영상의 카메라가 서버에 남아 '중지'로 보이고, 쌓이면 매장당 8대 제한에
-    // 걸려 등록이 막힌다. 목록에서 빠진 시연 카메라(demo-…)는 먼저 지운다 (soft delete, 다시 넣으면 되살아난다).
+    // 시연 영상 풀(manifest.videos) 전부를 카메라로 켜지는 않는다 — '카메라 추가' 위저드에서
+    // 고를 수 있게 일부는 남겨 둔다. '이미 추가된 카메라'는 서버에 이 매장 카메라로 등록돼 있는
+    // 것으로 정의한다(=단일 출처). 그래서 새로고침해도, 다른 탭에서 봐도 같은 카메라가 보인다.
+    //
+    // 시연 영상을 통째로 바꾸면(파일 교체) 예전 영상의 카메라가 서버에 남아 '중지'로 보이고,
+    // 쌓이면 매장당 8대 제한에 걸려 등록이 막힌다. 지금 풀에 없는 시연 카메라(demo-…)는 지운다
+    // (soft delete, 다시 넣으면 되살아난다). 지금 풀에도 있는 건 그대로 '켜진 카메라'로 이어간다.
     const listed = await request({ method: 'GET', path: `/stores/${encodeURIComponent(store.id)}/cameras` })
-    if (listed.ok) {
-      const current = new Set(manifest.videos.map((video) => video.id))
-      const cameras = (listed.data as { cameras?: { id: string; agentCameraId: string }[] } | null)?.cameras ?? []
-      await Promise.all(
-        cameras
-          .filter((camera) => camera.agentCameraId.startsWith('demo-') && !current.has(camera.agentCameraId))
-          .map((camera) => request({ method: 'DELETE', path: `/cameras/${encodeURIComponent(camera.id)}` })),
-      )
+    if (!listed.ok) {
+      return fail(`카메라 목록을 불러오지 못했습니다: ${listed.error}`)
     }
-
-    // 서버가 조각을 이 카메라에 달 수 있게 등록해 둔다. 같은 id 로 다시 등록하면 기존 것을 돌려준다.
-    const registered = await Promise.all(
-      manifest.videos.map((video, index) =>
-        request({
-          method: 'POST',
-          path: `/stores/${encodeURIComponent(store.id)}/cameras`,
-          body: { agentCameraId: video.id, name: video.name, sortOrder: index, streamProfile: 'sub' },
-        }),
-      ),
+    const poolIds = new Set(manifest.videos.map((video) => video.id))
+    const existingCameras = (listed.data as { cameras?: { id: string; agentCameraId: string }[] } | null)?.cameras ?? []
+    await Promise.all(
+      existingCameras
+        .filter((camera) => camera.agentCameraId.startsWith('demo-') && !poolIds.has(camera.agentCameraId))
+        .map((camera) => request({ method: 'DELETE', path: `/cameras/${encodeURIComponent(camera.id)}` })),
     )
-    const rejected = registered.find((result) => !result.ok)
-    if (rejected && !rejected.ok) {
-      return fail(`카메라를 서버에 등록하지 못했습니다: ${rejected.error}`)
-    }
+    const activeVideoIds = existingCameras
+      .filter((camera) => poolIds.has(camera.agentCameraId))
+      .map((camera) => camera.agentCameraId)
 
     // 조각 길이는 매장 설정이 단일 출처다. 미리 자른 길이와 맞춰 둔다 (30초 / 1분 / 5분만 된다).
     if (store.segmentSeconds !== manifest.segmentSeconds && [30, 60, 300].includes(manifest.segmentSeconds)) {
@@ -211,6 +222,7 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
 
     const collector = createCollector({
       manifest,
+      activeVideoIds,
       apiUrl: config.apiUrl,
       deviceToken: config.deviceToken,
       storeId: store.id,
@@ -240,12 +252,14 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
       fetch: browserFetch,
       onSegmentSeconds: () => undefined,
     }).start()
-    return { ok: true, storeName: store.name, cameraCount: manifest.videos.length }
+    return { ok: true, storeName: store.name, cameraCount: activeVideoIds.length }
   }
 
   const ready = boot().catch(
     (error: unknown): LiveBootResult => fail(error instanceof Error ? error.message : '실서버 데모를 시작하지 못했습니다'),
   )
+  latestManifest = () => state.manifest
+  latestReady = ready
 
   window.__sceneStealerLive = { configMissing: missingLiveConfig(config), ready }
 
@@ -266,23 +280,38 @@ export const createLiveApi = (config: LiveConfig = liveConfig): AgentApi => {
 
     previewStart: async (rtspUri) => {
       await ready
+      // '카메라 추가' 위저드는 아직 카메라로 켜지 않은(=collector.cameras 에 없는) 풀 영상도
+      // 미리 봐야 하니, 활성 카메라뿐 아니라 시연 영상 풀 전체에서 찾는다.
+      const match = /^demo-video:\/\/(.+)$/.exec(rtspUri)
+      const video = match ? state.manifest?.videos.find((candidate) => candidate.id === match[1]) : undefined
+      if (!video) return { ok: false, message: '시연 영상을 찾지 못했습니다' }
       const collector = state.collector
-      const camera = collector?.cameras.find((candidate) => candidate.rtspUri === rtspUri)
-      const video = camera ? state.manifest?.videos.find((candidate) => candidate.id === camera.id) : undefined
-      if (!collector || !camera || !video) return { ok: false, message: '시연 영상을 찾지 못했습니다' }
-      // 수집기가 올리고 있는 지점부터 튼다 — 화면에 보이는 장면이 곧 서버로 가는 조각이다.
-      // 영상이 끝났으면 끝 직전에서 틀어 마지막 장면에 멈추게 한다 (끝에서 열면 브라우저가 처음부터 틀 수 있다).
-      const seconds = Math.min(collector.playheadMs(camera.id), Math.max(0, video.durationMs - 100)) / 1000
+      const isActive = collector?.cameras.some((candidate) => candidate.id === video.id) ?? false
+      // 이미 켜진 카메라면 수집기가 올리고 있는 지점부터 튼다 — 화면에 보이는 장면이 곧 서버로
+      // 가는 조각이다. 아직 추가 전(미리보기만)이면 처음부터 튼다. 영상이 끝났으면 끝 직전에서
+      // 틀어 마지막 장면에 멈추게 한다 (끝에서 열면 브라우저가 처음부터 틀 수 있다).
+      const seconds = isActive && collector
+        ? Math.min(collector.playheadMs(video.id), Math.max(0, video.durationMs - 100)) / 1000
+        : 0
       return { ok: true, url: `${video.url}#t=${seconds.toFixed(2)}` }
     },
     previewStop: async () => undefined,
 
-    start: async () => {
+    start: async (cameras) => {
       await ready
-      state.collector?.start()
+      const collector = state.collector
+      if (!collector) return
+      // '카메라 추가/삭제'가 서버에 등록/해제한 뒤 여기로 새 카메라 목록을 넘긴다 — 서버가
+      // 아는 것과 수집기가 트는 것을 맞춘다. (실제 Electron 앱에서도 같은 자리에서
+      // ffmpeg 캡처 목록을 이 목록으로 맞춘다.)
+      collector.setActive(cameras.map((camera) => camera.id))
+      collector.start()
     },
     stop: async () => {
       await ready
+      // 카메라 목록은 그대로 두고 업로드만 멈춘다 — Live.tsx 의 '일시 중지' 도 이 자리를 쓴다.
+      // (마지막 카메라를 삭제했을 때도 여기로 오지만, 그 카메라는 이미 config.cameras 에서
+      // 빠져 있어 화면 타일은 사라진다 — 수집기 안에 남는 건 아무 데서도 안 보이는 값이다.)
       state.collector?.stop()
     },
     getConfig: async () => {

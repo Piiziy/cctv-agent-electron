@@ -23,15 +23,22 @@ import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { formatDailyUsage, formatResolution } from '../../lib/format'
 import { LOCATION_LABEL, LOCATION_ORDER, SPEED_OPTIONS } from '../../lib/labels'
+import { isLiveDemo } from '../../lib/live/config'
+import { liveDemoState } from '../../lib/live/live-api'
+import type { DemoVideo } from '../../lib/live/manifest'
 import { createCamera, ServerError, updateStore } from '../../lib/server-api'
 import { formatStamp } from '../../lib/time'
 
 const MAX_CAMERAS = 8
 
+/** 시연 영상 id 를 이 안에 담아 다닌다 (collector.ts 의 cameraFor 와 같은 규칙). */
+const DEMO_URI_PREFIX = 'demo-video://'
+const demoVideoIdOf = (rtspUri: string): string => rtspUri.slice(DEMO_URI_PREFIX.length)
+
 type Step = 1 | 2 | 3
 
 interface Choice {
-  readonly kind: 'onvif' | 'manual'
+  readonly kind: 'onvif' | 'manual' | 'demo'
   readonly camera: DiscoveredCamera | null
   readonly rtspUri: string
 }
@@ -96,7 +103,93 @@ const SubLabel = ({ main, hint }: { main: string; hint?: string }) => (
   </span>
 )
 
-/* ------------------------------------------------------------------- ① 찾기 */
+/* ------------------------------------------------------------------- ① 찾기 (실서버 데모 — 시연 영상 고르기) */
+
+/**
+ * 브라우저는 매장 네트워크의 카메라를 찾을 수 없다 (isLiveDemo, live/config.ts). 대신
+ * public/demo-video 의 시연 영상 중 아직 카메라로 켜지 않은 것을 "찾은 카메라"인 것처럼
+ * 고를 수 있게 한다 — 나머지 위저드(② 연결 확인 ③ 이름·설정)는 그대로 재사용한다.
+ */
+const DemoFindPanel = ({
+  active,
+  addedIds,
+  selected,
+  onChoose,
+}: {
+  active: boolean
+  addedIds: ReadonlySet<string>
+  selected: Choice | null
+  onChoose: (choice: Choice) => void
+}) => {
+  const [videos, setVideos] = useState<readonly DemoVideo[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void liveDemoState.ready().then(() => {
+      if (alive) setVideos(liveDemoState.videos())
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const available = (videos ?? []).filter((video) => !addedIds.has(video.id))
+
+  return (
+    <Panel active={active || selected !== null} className="gap-3.5">
+      <PanelTitle>① 찾은 카메라</PanelTitle>
+      <Notice tone="warn">
+        이 웹 체험판은 매장 네트워크의 실제 카메라를 찾을 수 없습니다. 대신 아래 시연 영상으로 카메라를 만들 수 있습니다.
+      </Notice>
+      <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
+        {videos === null && (
+          <div className="flex items-center justify-center gap-2 py-8 text-body-sm font-normal text-gray-600">
+            <Spinner className="size-4" />
+            시연 영상을 불러오는 중
+          </div>
+        )}
+        {videos !== null && available.length === 0 && (
+          <p className="py-6 text-center text-body-sm font-normal text-gray-600">
+            추가할 수 있는 시연 영상이 없습니다. 설정 ▸ 카메라 관리에서 정리해 주세요.
+          </p>
+        )}
+        {available.map((video) => {
+          const rtspUri = `${DEMO_URI_PREFIX}${video.id}`
+          const isSelected = selected?.rtspUri === rtspUri
+          return (
+            <div
+              key={video.id}
+              className={cn(
+                'flex items-center justify-between gap-3 rounded-card px-4 py-3.5',
+                isSelected
+                  ? 'bg-blue-100 shadow-[inset_0_0_0_1.5px_var(--sub)]'
+                  : 'shadow-[inset_0_0_0_1px_var(--gray-300)]',
+              )}
+            >
+              <div className="min-w-0">
+                <div className="truncate text-[15px] font-semibold">{video.name}</div>
+                <div className="truncate text-caption text-gray-600">시연 영상으로 대체</div>
+              </div>
+              {isSelected ? (
+                <span className="shrink-0 rounded-chip bg-brand-sub px-3 py-1 text-caption font-semibold text-white">
+                  선택됨
+                </span>
+              ) : (
+                <Button
+                  variant="secondary"
+                  className="shrink-0 px-3.5 py-1.5 text-caption"
+                  onClick={() => onChoose({ kind: 'demo', camera: null, rtspUri })}
+                >
+                  추가
+                </Button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </Panel>
+  )
+}
 
 const FindPanel = ({
   active,
@@ -298,10 +391,42 @@ const VerifyPanel = ({
     onProbed(result)
   }, [choice, username, password, onProbed])
 
-  // 수동 입력은 자격증명이 주소에 이미 들어 있어 바로 조사한다.
+  // 시연 영상은 실제로 연결을 확인할 게 없다 — 영상 자체의 해상도·fps 로 프로필을 바로 만든다.
+  const probeDemo = useCallback(
+    (demoChoice: Choice) => {
+      setFailure(null)
+      const video = liveDemoState.videos().find((candidate) => `demo-video://${candidate.id}` === demoChoice.rtspUri)
+      if (!video) {
+        const result: ProbeResult = { ok: false, kind: 'unreachable', message: '시연 영상을 찾지 못했습니다' }
+        setFailure(result.message)
+        onProbed(result)
+        return
+      }
+      onProbed({
+        ok: true,
+        profiles: [
+          {
+            token: 'demo',
+            kind: 'sub',
+            rtspUri: demoChoice.rtspUri,
+            codec: video.codec,
+            width: video.width,
+            height: video.height,
+            fps: video.fps,
+            bitrateKbps: null,
+          },
+        ],
+      })
+    },
+    [onProbed],
+  )
+
+  // 수동 입력은 자격증명이 주소에 이미 들어 있어 바로 조사하고, 시연 영상은 아이디·비밀번호
+  // 자체가 없으니 곧장 프로필을 만든다.
   useEffect(() => {
     setFailure(null)
     if (choice?.kind === 'manual') void probe()
+    if (choice?.kind === 'demo') probeDemo(choice)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [choice])
 
@@ -314,7 +439,7 @@ const VerifyPanel = ({
     <Panel active={active} className="gap-4">
       <PanelTitle>② 비밀번호 넣고 화면 확인</PanelTitle>
 
-      {choice?.kind !== 'manual' && (
+      {choice?.kind === 'onvif' && (
         <>
           <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2.5">
             <Input
@@ -474,8 +599,10 @@ export const AddCamera = () => {
     if (!choice || !selectedProfile) return
     setStarting(true)
     setError(null)
+    // 시연 영상의 id 는 서버·수집기가 이 카메라를 알아보는 열쇠(agentCameraId)라 반드시
+    // collector.ts 의 cameraFor 와 같은 규칙(순수 video.id)이어야 한다 — rtspUri 그대로 쓰면 안 된다.
     const camera: SelectedCamera = {
-      id: choice.camera?.id ?? selectedProfile.rtspUri,
+      id: choice.kind === 'demo' ? demoVideoIdOf(choice.rtspUri) : (choice.camera?.id ?? selectedProfile.rtspUri),
       name: name.trim() || '카메라',
       manufacturer: choice.camera?.manufacturer ?? null,
       model: choice.camera?.model ?? null,
@@ -519,7 +646,8 @@ export const AddCamera = () => {
         <div>
           <h1 className="text-h1">카메라 추가</h1>
           <p className="mt-1 text-body-sm font-normal text-gray-600">
-            {config.cameras.length} / {MAX_CAMERAS}대 등록됨 · 같은 공유기에 연결된 카메라를 자동으로 찾습니다
+            {config.cameras.length} / {MAX_CAMERAS}대 등록됨 ·{' '}
+            {isLiveDemo ? '시연 영상으로 카메라를 대신 만들 수 있습니다' : '같은 공유기에 연결된 카메라를 자동으로 찾습니다'}
           </p>
         </div>
         <div className="flex items-center gap-2.5 text-body-sm font-semibold">
@@ -539,13 +667,17 @@ export const AddCamera = () => {
         '이 화면이 맞나요?' 가 글자마다 끊겼다. minmax(0, …) 는 내용이 넓어도 칸을 밀지 않게 한다.
       */}
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,380fr)_minmax(0,548fr)_minmax(0,400fr)] gap-4">
-        <FindPanel
-          active={!full && step === 1}
-          addedIds={addedIds}
-          addedNames={addedNames}
-          selected={choice}
-          onChoose={choose}
-        />
+        {isLiveDemo ? (
+          <DemoFindPanel active={!full && step === 1} addedIds={addedIds} selected={choice} onChoose={choose} />
+        ) : (
+          <FindPanel
+            active={!full && step === 1}
+            addedIds={addedIds}
+            addedNames={addedNames}
+            selected={choice}
+            onChoose={choose}
+          />
+        )}
         <VerifyPanel
           active={step === 2}
           choice={choice}

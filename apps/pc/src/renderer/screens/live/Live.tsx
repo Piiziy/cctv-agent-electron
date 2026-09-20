@@ -19,7 +19,7 @@ import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { formatBytes } from '../../lib/format'
 import { EVENT_TITLE, RISK_LABEL, SPEED_OPTIONS, STATE_LABEL } from '../../lib/labels'
-import { getMonitoring, listEvents } from '../../lib/server-api'
+import { deleteCamera, getMonitoring, listEvents } from '../../lib/server-api'
 import { formatAgo, formatClock, formatDuration, localDateKey, localDayRange } from '../../lib/time'
 
 const MAX_CAMERAS = 8
@@ -147,6 +147,7 @@ const CameraCard = ({
   quality,
   now,
   onSelect,
+  onDelete,
   compact = false,
   className,
 }: {
@@ -154,10 +155,13 @@ const CameraCard = ({
   quality: 'tile' | 'full'
   now: number
   onSelect?: () => void
+  /** 있으면 타일 모서리에 삭제 버튼을 둔다 — 서버에 등록된 카메라(tile.server)만 지울 수 있다. */
+  onDelete?: () => void
   /** '하나 크게' 아래 줄의 작은 카드 — 상태 글은 빼고 점만 둔다. 글까지 두면 이름이 한 글자로 잘린다. */
   compact?: boolean
   className?: string
 }) => {
+  const [confirming, setConfirming] = useState(false)
   const state = tile.runtime?.camera ?? 'idle'
   const streaming = state === 'streaming'
   const broken = state === 'reconnecting' || state === 'auth-failed'
@@ -178,55 +182,100 @@ const CameraCard = ({
           : '중지'
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={!onSelect}
+    <div
       className={cn(
-        'flex min-h-0 flex-col overflow-hidden rounded-card bg-surface text-left shadow-card',
+        'group relative flex min-h-0 flex-col overflow-hidden rounded-card bg-surface shadow-card',
         // 2c — 끊긴 카메라는 error/300 1.5px 테두리
         broken && 'shadow-[inset_0_0_0_1.5px_var(--error-300)]',
-        onSelect && 'transition hover:shadow-[inset_0_0_0_2px_var(--blue-600)]',
         className,
       )}
     >
-      {broken ? (
-        <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1.5 bg-gray-100 text-caption text-gray-600">
-          <span className="text-[20px]">◌</span>
-          {state === 'auth-failed'
-            ? '비밀번호를 확인해 주세요'
-            : `재연결 중${lastFrame ? ` · 마지막 화면 ${formatClock(lastFrame)}` : ''}`}
-        </div>
-      ) : (
-        <VideoSurface className="min-h-0 flex-1 aspect-auto">
-          {tile.local && streaming && <LiveImage camera={tile.local} quality={quality} />}
-          {!tile.local && <span>이 PC에 연결 정보가 없습니다</span>}
-          {tile.local && !streaming && state !== 'connecting' && <span>감시 중지됨</span>}
-          {state === 'connecting' && <Spinner className="text-gray-500" />}
-          <span className="absolute left-2.5 top-2.5 rounded-[6px] bg-[rgb(0_0_0/.55)] px-2 py-[3px] text-[12px] text-white">
-            {label}
-            {streaming ? ' · LIVE' : ''}
+      <button
+        type="button"
+        onClick={onSelect}
+        disabled={!onSelect}
+        className={cn(
+          'flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-card text-left',
+          onSelect && 'transition hover:shadow-[inset_0_0_0_2px_var(--blue-600)]',
+        )}
+      >
+        {broken ? (
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1.5 bg-gray-100 text-caption text-gray-600">
+            <span className="text-[20px]">◌</span>
+            {state === 'auth-failed'
+              ? '비밀번호를 확인해 주세요'
+              : `재연결 중${lastFrame ? ` · 마지막 화면 ${formatClock(lastFrame)}` : ''}`}
+          </div>
+        ) : (
+          <VideoSurface className="min-h-0 flex-1 aspect-auto">
+            {tile.local && streaming && <LiveImage camera={tile.local} quality={quality} />}
+            {!tile.local && <span>이 PC에 연결 정보가 없습니다</span>}
+            {tile.local && !streaming && state !== 'connecting' && <span>감시 중지됨</span>}
+            {state === 'connecting' && <Spinner className="text-gray-500" />}
+            <span className="absolute left-2.5 top-2.5 rounded-[6px] bg-[rgb(0_0_0/.55)] px-2 py-[3px] text-[12px] text-white">
+              {label}
+              {streaming ? ' · LIVE' : ''}
+            </span>
+          </VideoSurface>
+        )}
+        {/* <button> 의 자식은 flex-col 에서도 폭을 채우지 않는다 — 이름·상태를 양 끝으로 벌리려면 w-full. */}
+        <div className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5">
+          <span className="truncate text-[15px] font-semibold">{tile.name}</span>
+          <span
+            title={compact ? statusText : undefined}
+            className={cn(
+              'flex shrink-0 items-center gap-[5px] text-caption',
+              broken ? 'font-semibold text-error-main' : 'text-gray-600',
+            )}
+          >
+            <StatusDot
+              className="size-[7px]"
+              tone={streaming ? 'connected' : broken ? 'disconnected' : state === 'connecting' ? 'reconnecting' : 'idle'}
+            />
+            {!compact && statusText}
           </span>
-        </VideoSurface>
-      )}
-      {/* <button> 의 자식은 flex-col 에서도 폭을 채우지 않는다 — 이름·상태를 양 끝으로 벌리려면 w-full. */}
-      <div className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5">
-        <span className="truncate text-[15px] font-semibold">{tile.name}</span>
-        <span
-          title={compact ? statusText : undefined}
-          className={cn(
-            'flex shrink-0 items-center gap-[5px] text-caption',
-            broken ? 'font-semibold text-error-main' : 'text-gray-600',
-          )}
-        >
-          <StatusDot
-            className="size-[7px]"
-            tone={streaming ? 'connected' : broken ? 'disconnected' : state === 'connecting' ? 'reconnecting' : 'idle'}
-          />
-          {!compact && statusText}
-        </span>
-      </div>
-    </button>
+        </div>
+      </button>
+      {onDelete &&
+        (confirming ? (
+          <div
+            className="absolute right-2 top-2 flex gap-1 rounded-chip bg-[rgb(0_0_0/.7)] p-1"
+            // 타일 전체가 onSelect 버튼이라, 여기서 난 클릭이 그 버튼까지 뚫고 가지 않게 한다.
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-[4px] px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/20"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-[4px] bg-error-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-error-600"
+            >
+              삭제
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-label={`${tile.name} 삭제`}
+            onClick={(event) => {
+              event.stopPropagation()
+              setConfirming(true)
+            }}
+            className={cn(
+              'absolute right-2 top-2 flex size-6 items-center justify-center rounded-full',
+              'bg-[rgb(0_0_0/.55)] text-[13px] text-white opacity-0 transition',
+              'hover:bg-error-500 group-hover:opacity-100',
+            )}
+          >
+            ✕
+          </button>
+        ))}
+    </div>
   )
 }
 
@@ -410,14 +459,32 @@ const TodayFeed = ({ storeId }: { storeId: string }) => {
 export const Live = () => {
   const navigate = useNavigate()
   const store = useConnectedStore()
-  const { config, status } = useSession()
+  const { config, status, updateConfig } = useSession()
   const { resyncToken } = useStream()
   const [layout, setLayout] = useState<'grid' | 'single'>('grid')
   const [focusKey, setFocusKey] = useState<string | null>(null)
   const [pausing, setPausing] = useState(false)
+  const [removingKey, setRemovingKey] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
 
   const monitoring = useResource(() => getMonitoring(store.id), [store.id, resyncToken])
+
+  // 카메라 관리(설정)와 같은 절차 — 서버에서 지우고, 이 PC 의 감시 목록에서도 뺀 뒤 다시 건다.
+  const removeCamera = async (tile: TileModel) => {
+    if (!tile.server || removingKey) return
+    setRemovingKey(tile.key)
+    try {
+      await deleteCamera(tile.server.id)
+      const next = config.cameras.filter((camera) => camera.id !== tile.key)
+      if (next.length === 0) await api.stop()
+      else await api.start(next)
+      await updateConfig({ cameras: next })
+      if (focusKey === tile.key) setFocusKey(null)
+      await monitoring.reload()
+    } finally {
+      setRemovingKey(null)
+    }
+  }
 
   // '1분 전' 같은 상대 시각이 멈춰 보이지 않게, 그리고 lastAnalyzedAt 을 따라가게.
   useEffect(() => {
@@ -526,6 +593,7 @@ export const Live = () => {
                   setFocusKey(tile.key)
                   setLayout('single')
                 }}
+                onDelete={tile.server ? () => void removeCamera(tile) : undefined}
               />
             ))}
             {tiles.length < MAX_CAMERAS && (

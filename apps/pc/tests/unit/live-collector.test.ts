@@ -68,8 +68,11 @@ const fakeServer = (statuses: number[] = []) => {
 const setup = (statuses: number[] = []) => {
   const server = fakeServer(statuses)
   let id = 0
+  const m = manifest()
   const deps: CollectorDeps = {
-    manifest: manifest(),
+    manifest: m,
+    // 예전엔 manifest 의 영상 전부가 곧 카메라였다 — 테스트는 그 전제를 그대로 쓴다.
+    activeVideoIds: m.videos.map((video) => video.id),
     apiUrl: 'https://api.test/',
     deviceToken: 'ss_dev_demo',
     storeId: 'store-1',
