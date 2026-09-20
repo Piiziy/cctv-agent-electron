@@ -5,17 +5,24 @@
  * 데모를 가짜 백엔드용 값으로 굽고(필요할 때만), 가짜 백엔드(:8787)와 웹(:4173)을 띄우고,
  * 매장 PC 화면과 사장님 휴대폰 화면을 둘 다 연다. Ctrl+C 로 둘 다 내린다.
  *
- * 진짜 백엔드는 `https://*.scene-stealer.site` 페이지만 받는다 (CORS — scene-stealer-back
- * backend/app/cors.py, ingest-worker/src/cors.ts). 그래서 로컬 주소로는 붙을 수 없고, 계약과 같은
- * 모양으로 답하는 [`stub-backend.mjs`](stub-backend.mjs) 를 쓴다. 이 dist 는 가짜 백엔드를 가리키니
- * 배포하지 않는다 — Vercel 은 저장소를 새로 굽는다.
+ * 기본은 가짜 백엔드다. 브라우저는 진짜 백엔드를 직접 부르지 못한다 — CORS 가
+ * `https://*.scene-stealer.site` 페이지만 받는다 (scene-stealer-back backend/app/cors.py,
+ * ingest-worker/src/cors.ts). 그래서 계약과 같은 모양으로 답하는 [`stub-backend.mjs`](stub-backend.mjs) 를 쓴다.
  *
- *   npm run wanted                 바뀐 게 있을 때만 굽고 띄운다
+ * `--live` 는 진짜 백엔드를 본다. 앱에는 이 미리보기 서버의 경로(/live-api)를 API 주소로 주고 서버가
+ * 대신 넘긴다 (vite.config.ts 의 preview.proxy) — 브라우저에게는 같은 출처라 CORS 를 타지 않는다.
+ * 데모 계정 값은 저장소에 없다. `.env.local` 에 넣어 두면 읽는다 (git 에 올라가지 않는다).
+ *
+ * 어느 쪽이든 이 dist 는 배포하지 않는다 — Vercel 은 저장소를 새로 굽는다.
+ *
+ *   npm run wanted                 바뀐 게 있을 때만 굽고 띄운다 (가짜 백엔드)
+ *   npm run wanted -- --live       진짜 백엔드로 (.env.local 의 LIVE_* 가 필요하다)
  *   npm run wanted -- --build      무조건 다시 굽는다
  *   npm run wanted -- --no-build   굽지 않고 있는 dist 로 띄운다
  *   npm run wanted -- --no-open    창을 열지 않는다 (주소만 찍는다)
  */
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { connect } from 'node:net'
@@ -42,6 +49,62 @@ const STUB_LIVE = {
   LIVE_PASSWORD: 'pw',
   LIVE_DEVICE_TOKEN: 'ss_dev_demo',
   LIVE_STORE_ID: 'store-demo',
+}
+
+/** --live 에서 채워야 하는 값. LIVE_API_URL · LIVE_STORE_ID 는 기본값이 있다. */
+const LIVE_REQUIRED = ['LIVE_SUPABASE_URL', 'LIVE_SUPABASE_ANON_KEY', 'LIVE_EMAIL', 'LIVE_PASSWORD', 'LIVE_DEVICE_TOKEN']
+const LIVE_API_DEFAULT = 'https://api.scene-stealer.site'
+/** 값을 두는 곳. git 에 올라가지 않는다 (.gitignore 의 .env.*). */
+const ENV_FILE = resolve(repo, '.env.local')
+
+/** KEY=값 한 줄씩. 따옴표로 감싼 값도 받는다. */
+const readEnvFile = () => {
+  if (!existsSync(ENV_FILE)) return {}
+  const entries = readFileSync(ENV_FILE, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => {
+      const at = line.indexOf('=')
+      if (at < 0) return null
+      const value = line.slice(at + 1).trim()
+      return [line.slice(0, at).trim(), value.replace(/^["']|["']$/g, '')]
+    })
+  return Object.fromEntries(entries.filter(Boolean))
+}
+
+/**
+ * 진짜 백엔드를 볼 때 앱에 넣을 값.
+ *
+ * 브라우저는 백엔드를 직접 부르지 못한다 — 백엔드 CORS 가 https://*.scene-stealer.site 만 받아서
+ * localhost 페이지는 거절당한다. 그래서 앱에는 이 미리보기 서버의 경로(/live-api)를 API 주소로 주고,
+ * 서버가 대신 진짜 백엔드로 넘긴다 (vite.config.ts 의 preview.proxy). 브라우저에게는 같은 출처다.
+ * 로그인(Supabase)은 어느 출처든 받아 주므로 그대로 진짜 주소로 간다.
+ */
+const liveConfig = () => {
+  const file = readEnvFile()
+  const read = (key) => (process.env[key] ?? file[key] ?? '').trim()
+  const missing = LIVE_REQUIRED.filter((key) => !read(key))
+  if (missing.length > 0) {
+    throw new Error(
+      `진짜 백엔드로 붙으려면 값이 더 필요합니다: ${missing.join(', ')}\n` +
+        `Vercel 프로젝트 Settings → Environment Variables 의 같은 이름 값을 ${ENV_FILE} 에 한 줄씩 넣어 주세요 (git 에 올라가지 않습니다):\n` +
+        `  LIVE_SUPABASE_URL=...\n  LIVE_SUPABASE_ANON_KEY=...\n  LIVE_EMAIL=...\n  LIVE_PASSWORD=...\n  LIVE_DEVICE_TOKEN=...\n  LIVE_STORE_ID=...(매장이 하나면 비워도 됩니다)`,
+    )
+  }
+  const apiUrl = read('LIVE_API_URL') || LIVE_API_DEFAULT
+  return {
+    apiUrl,
+    env: {
+      LIVE_API_URL: `${WEB}/live-api`,
+      LIVE_SUPABASE_URL: read('LIVE_SUPABASE_URL'),
+      LIVE_SUPABASE_ANON_KEY: read('LIVE_SUPABASE_ANON_KEY'),
+      LIVE_EMAIL: read('LIVE_EMAIL'),
+      LIVE_PASSWORD: read('LIVE_PASSWORD'),
+      LIVE_DEVICE_TOKEN: read('LIVE_DEVICE_TOKEN'),
+      LIVE_STORE_ID: read('LIVE_STORE_ID'),
+    },
+  }
 }
 
 /** 이 안의 파일이 구운 시각보다 새로우면 다시 굽는다. 없는 경로는 건너뛴다. */
@@ -95,7 +158,7 @@ const buildReason = (key, newest) => {
   } catch {
     return '이 스크립트로 구운 것이 아닙니다'
   }
-  if (stamp.key !== key) return '지난번과 다른 서버 주소로 구워져 있습니다'
+  if (stamp.key !== key) return '지난번과 다른 설정(백엔드·계정)으로 구워져 있습니다'
   if ((stamp.newest ?? 0) < newest) return '그 뒤로 소스가 바뀌었습니다'
   return null
 }
@@ -195,21 +258,32 @@ const openInBrowser = (url) => {
 }
 
 const main = async () => {
-  const key = JSON.stringify(STUB_LIVE)
+  const live = wants('live') ? liveConfig() : null
+  const buildEnv = live ? live.env : STUB_LIVE
+  // 값 자체는 남기지 않는다 (진짜 계정이 섞인다). 같은 설정인지만 알면 된다.
+  const key = createHash('sha256').update(JSON.stringify(buildEnv)).digest('hex').slice(0, 16)
   const newest = Math.max(...SOURCES.map((path) => newestMtime(resolve(repo, path))))
   const reason = wants('build') ? '다시 구우라고 하셨습니다' : buildReason(key, newest)
+
+  console.log(
+    live
+      ? `진짜 백엔드를 봅니다 — ${live.apiUrl}. 브라우저는 CORS 에 막히므로 이 서버가 /live-api 로 대신 넘깁니다.`
+      : '가짜 백엔드로 돕니다. 진짜 백엔드를 보려면 --live.',
+  )
 
   if (reason && wants('no-build')) {
     console.log(`굽지 않고 있는 것으로 띄웁니다 (${reason})`)
   } else if (reason) {
     console.log(`굽습니다 — ${reason}. 처음이면 몇 분 걸립니다.`)
-    await runToEnd(resolve(here, 'build-all.mjs'), [], STUB_LIVE)
+    await runToEnd(resolve(here, 'build-all.mjs'), [], buildEnv)
     writeFileSync(stampPath, JSON.stringify({ key, newest, builtAt: new Date().toISOString() }, null, 2))
   } else {
     console.log('구운 것이 최신입니다 — 그대로 띄웁니다. (다시 구우려면 --build)')
   }
 
-  if (await responds(API_PORT)) {
+  if (live) {
+    // 가짜 백엔드는 띄우지 않는다.
+  } else if (await responds(API_PORT)) {
     console.log(`가짜 백엔드 :${API_PORT} 는 이미 떠 있어 그대로 씁니다.`)
   } else {
     startServer('[백엔드]', resolve(here, 'stub-backend.mjs'), [], { env: { PORT: String(API_PORT) } })
@@ -223,9 +297,12 @@ const main = async () => {
       (response) => (response.ok ? response.text() : ''),
       () => '',
     )
-    if (served.trim() !== readFileSync(resolve(dist, 'wanted-test/index.html'), 'utf8').trim()) {
+    const sameBuild = served.trim() === readFileSync(resolve(dist, 'wanted-test/index.html'), 'utf8').trim()
+    // --live 는 넘겨주는 길까지 살아 있어야 한다. 가짜 백엔드로 띄워 둔 서버에는 그 길이 없다.
+    const proxied = !live || (await fetch(`${WEB}/live-api/healthz`).then((response) => response.ok, () => false))
+    if (!sameBuild || !proxied) {
       throw new Error(
-        `:${WEB_PORT} 를 다른 서버가 쓰고 있습니다 — 지금 구운 /wanted-test 를 주지 않습니다.\n` +
+        `:${WEB_PORT} 를 다른 서버가 쓰고 있습니다 — ${sameBuild ? '진짜 백엔드로 넘겨주지 않습니다' : '지금 구운 /wanted-test 를 주지 않습니다'}.\n` +
           '그 서버를 끄고 다시 실행해 주세요.',
       )
     }
@@ -235,7 +312,10 @@ const main = async () => {
     const manifestPath = createRequire(resolve(demoWeb, 'package.json')).resolve('vite/package.json')
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     const viteBin = resolve(dirname(manifestPath), typeof manifest.bin === 'string' ? manifest.bin : manifest.bin.vite)
-    startServer('[웹]', viteBin, ['preview', '--port', String(WEB_PORT), '--strictPort'], { cwd: demoWeb })
+    startServer('[웹]', viteBin, ['preview', '--port', String(WEB_PORT), '--strictPort'], {
+      cwd: demoWeb,
+      env: { WANTED_LIVE_API: live?.apiUrl ?? '' },
+    })
     await waitFor(WEB_PORT, '웹')
   }
 
@@ -244,10 +324,15 @@ const main = async () => {
   console.log('')
   console.log(`  매장 PC 화면    ${pc}`)
   console.log(`  사장님 휴대폰   ${phone}`)
-  console.log(`  가짜 백엔드     http://localhost:${API_PORT}  (첫 조각에서 위험 이벤트를 만듭니다)`)
+  console.log(
+    live
+      ? `  백엔드          ${live.apiUrl}  (진짜입니다 — 조각도 판정도 진짜 데모 매장에 남습니다)`
+      : `  가짜 백엔드     http://localhost:${API_PORT}  (첫 조각에서 위험 이벤트를 만듭니다)`,
+  )
   console.log('')
   console.log('  PC 화면이 시연 영상을 카메라 삼아 30초 조각을 올립니다. 잠시 뒤 PC 에 경고가 뜨고,')
   console.log("  휴대폰 화면에도 같은 경고가 옵니다. 휴대폰에서 '확인했어요' 를 누르면 PC 경고가 닫힙니다.")
+  if (live) console.log('  경고는 서버 AI 가 판정한 것만 뜹니다 — 분석이 실패하면 아무 경고도 뜨지 않습니다.')
   console.log('')
 
   if (wants('no-open')) {

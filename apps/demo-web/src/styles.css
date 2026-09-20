@@ -148,44 +148,54 @@ html, body {
 }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ---------------------------------------------- 실서버 시연 (/wanted-test) — 앱이 창을 가득 채운다 */
+/* ---------------------------------------------- 실서버 시연 (/wanted-test) — 어느 화면을 볼지 고른다 */
 
-.app-window { background: var(--surface); }
-
-/* 크기·배율은 live.ts 가 창에 맞춰 정한다. */
-.app-window #pc {
-  position: fixed;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-  box-shadow: none;
-}
-
-/* ---------------------------------------------- 실서버 시연을 시작하지 못한 이유 */
-
-.notice {
-  position: fixed;
-  inset: 0;
-  z-index: 15;
+/* 로고 하나와 버튼 둘. 작은 화면에서는 세로로 길어지므로 스크롤을 막지 않는다. */
+.chooser {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgb(20 35 61 / 0.55);
+  overflow: auto;
 }
-.notice-card {
-  width: min(480px, 100%);
-  background: var(--surface);
+
+.chooser-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 36px;
+  width: min(340px, 100%);
+}
+
+.logo { display: flex; align-items: center; gap: 9px; margin: 0; }
+.logo svg { width: 46px; height: auto; }
+.logo .word {
+  font-family: Prompt, Pretendard, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 27px;
+  letter-spacing: -0.01em;
+  color: var(--brand);
+}
+
+.choices { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 24px;
-  box-shadow: 0 12px 40px rgb(20 35 61 / 0.25);
+  background: var(--surface);
+  color: var(--brand);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgb(20 35 61 / 0.05);
+  transition: border-color 0.15s, color 0.15s, transform 0.15s;
 }
-.notice-card h1 { margin: 0; font-size: 18px; }
-.notice-card p { margin: 10px 0 0; font-size: 14px; line-height: 1.6; }
-.notice-list {
-  margin: 10px 0 0;
-  padding-left: 20px;
-  font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
+.choice:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+.choice:active { transform: none; }
+.choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 @media (max-width: 720px) {
   .phone { display: none; }

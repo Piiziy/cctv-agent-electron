@@ -27,8 +27,8 @@ Vercel 에 배포한 주소. 이 한 주소 안에 다 있다.
 /wanted-test   실서버 시연 — 데모 계정 · 시연 영상 · 실제 서버 AI 판정 (제출용 주소)
 /              → /wanted-test 로 넘어간다 (2026-09-18, vercel.json redirects)
 /index.html    가짜 서버로 도는 예전 데모 (서버 없이도 끝까지 돈다). 링크는 걸려 있지 않다
-/wanted-test/m/   실서버 시연의 사장님 앱 — 휴대폰으로 /wanted-test 를 열면 여기로 넘어간다
-/wanted-test/pc/  실서버 시연의 매장 PC 화면 — /wanted-test 가 창 가득 띄운다
+/wanted-test/m/   실서버 시연의 사장님 앱 — /wanted-test 의 '모바일 뷰 보기'
+/wanted-test/pc/  실서버 시연의 매장 PC 화면 — /wanted-test 의 'PC 뷰 보기'
 /pc/  /m/         가짜 서버 데모의 PC 화면 · 사장님 앱 (데모 계정이 실리지 않는다)
 ```
 
