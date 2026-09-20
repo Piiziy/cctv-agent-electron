@@ -14,6 +14,7 @@
     "test:unit": "turbo run test:unit",
     "test:e2e": "turbo run test:e2e",
     "dev": "npm run dev -w cctv-agent --",
+    "wanted": "node apps/demo-web/scripts/wanted.mjs",
     "ui": "npm run ui -w cctv-agent --",
     "preview": "npm run preview -w cctv-agent --",
     "fake-camera": "npm run fake-camera -w cctv-agent --",
