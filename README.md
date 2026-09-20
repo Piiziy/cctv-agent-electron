@@ -59,6 +59,7 @@ npm install
 | `npm run test:unit` | 단위 테스트 (Turborepo, 결과 캐시) |
 | `npm run test:e2e` | E2E (캐시 안 함) |
 | `npm run dev` | PC 앱 개발 모드 |
+| `npm run wanted` | 심사위원이 보는 `/wanted-test` 를 이 컴퓨터에서 — 가짜 백엔드까지 띄우고 매장 PC·사장님 휴대폰 화면을 둘 다 연다 |
 | `npm run ui` | PC 앱 화면만 브라우저로 (`localhost:5174`, 가짜 API) |
 | `npm run fake-camera` | 가짜 CCTV 카메라. `-- --file <영상>` 으로 가진 영상을 물린다 |
 | `npm run dist` | PC 앱 설치 파일 |

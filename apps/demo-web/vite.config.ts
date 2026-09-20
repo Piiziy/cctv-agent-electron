@@ -1,8 +1,31 @@
-import { resolve } from 'node:path'
-import { defineConfig } from 'vite'
+import { extname, resolve } from 'node:path'
+import { defineConfig, type Plugin } from 'vite'
+
+/**
+ * 배포(vercel.json)의 rewrite 를 `vite preview` 에도 똑같이 건다 — `npm run wanted` 가 이걸로 띄운다.
+ * 두 앱은 주소를 브라우저에서 갈아 끼우는 SPA 라, /wanted-test/m/events/ev-1 을 새로 고치면 정적
+ * 서버는 그런 파일이 없다고 한다. 그 앱의 index.html 을 대신 준다 — 확장자가 있는 주소(번들·영상)는 그대로.
+ *
+ * 슬래시 없는 /wanted-test 도 여기서 잡는다. 안 그러면 vite 의 SPA 되돌리기가 맨 위 index.html —
+ * 가짜 서버 데모 셸 — 을 줘서, 심사위원이 받은 주소 그대로 열면 엉뚱한 데모가 뜬다.
+ * 긴 주소를 먼저 본다 (/wanted-test/m 이 /wanted-test 보다 앞).
+ */
+const previewRewrites = (): Plugin => ({
+  name: 'demo-web-preview-rewrites',
+  configurePreviewServer: (server) => {
+    const apps = ['/wanted-test/m', '/wanted-test/pc', '/wanted-test', '/m', '/pc']
+    server.middlewares.use((req, _res, next) => {
+      const [path = '/', query] = (req.url ?? '/').split('?')
+      const app = extname(path) ? undefined : apps.find((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+      if (app) req.url = `${app}/index.html${query ? `?${query}` : ''}`
+      next()
+    })
+  },
+})
 
 // 기본은 도메인 루트. 하위 경로에 올릴 때만 DEMO_BASE 로 알려 준다.
 export default defineConfig(() => ({
+  plugins: [previewRewrites()],
   // 개발 중에는 루트에서 띄운다 — 아래 프록시 경로(/pc, /m)와 맞아야 하기 때문이다.
   base: process.env.DEMO_BASE ?? '/',
   // scripts/demo-video.mjs 가 자른 시연 영상(.generated/demo-video/)을 /demo-video/ 로 내보낸다.

@@ -42,6 +42,16 @@ npm run preview -w @scene-stealer/demo-web        # 구운 것 띄우기 → htt
 '조각 업로드 → PC 경고 → 휴대폰에서 확인했어요 → PC 경고 닫힘' 을 볼 수 있다. 응답 모양은 진짜 백엔드와
 같게 둔다 — 편하게 주면 화면이 그걸 믿다가 실서버에서 깨진다 (상태 변경 응답이 그랬다).
 
+진짜 백엔드는 같은 최상위 도메인의 https 페이지만 받으므로(CORS) 로컬 주소로는 붙을 수 없다. 로컬에서
+`/wanted-test` 를 보는 길은 이 가짜 백엔드뿐이다.
+
+```bash
+npm run wanted      # 저장소 루트에서 — 굽고(필요할 때만) 띄우고 PC·휴대폰 화면을 둘 다 연다
+```
+
+[`scripts/wanted.mjs`](scripts/wanted.mjs) 가 아래 세 가지를 대신 한다. 소스가 그대로면 다시 굽지 않는다
+(`--build` 무조건 굽기 · `--no-build` 굽지 않기 · `--no-open` 창 안 열기). 직접 하려면:
+
 ```bash
 LIVE_API_URL=http://localhost:8787 LIVE_SUPABASE_URL=http://localhost:8787 LIVE_SUPABASE_ANON_KEY=local \
 LIVE_EMAIL=demo@scene.test LIVE_PASSWORD=pw LIVE_DEVICE_TOKEN=ss_dev_demo LIVE_STORE_ID=store-demo \
@@ -50,7 +60,11 @@ node apps/demo-web/scripts/stub-backend.mjs          # :8787 — 첫 조각에�
 npm run preview -w @scene-stealer/demo-web           # http://localhost:4173/wanted-test/
 ```
 
-휴대폰 화면은 같은 주소를 휴대폰 크기 창(개발자 도구의 기기 흉내)으로 열면 `/wanted-test/m/` 로 넘어간다.
+| 주소 | |
+|---|---|
+| `http://localhost:4173/wanted-test` | 매장 PC 화면 (컴퓨터 창) |
+| `http://localhost:4173/wanted-test/m/` | 사장님 휴대폰 화면 — 컴퓨터 창에서도 휴대폰 폭으로 뜬다 |
+
 이 빌드는 가짜 백엔드를 가리키니 배포하지 않는다 — Vercel 은 저장소를 새로 굽는다.
 
 ## 가짜 서버 데모 동선 (/index.html)
