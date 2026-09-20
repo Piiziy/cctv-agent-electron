@@ -14,7 +14,7 @@ const mockClipUrl = (): string | undefined =>
   config.clipUrl || (Platform.OS === 'web' ? `${config.webBaseUrl}/clips/sample.mp4` : undefined)
 
 export const ApiProvider = ({ children }: { children: ReactNode }) => {
-  const { session, accessToken } = useSession()
+  const { session, accessToken, renew } = useSession()
 
   const api = useMemo<SceneStealerApi>(
     () =>
@@ -24,8 +24,10 @@ export const ApiProvider = ({ children }: { children: ReactNode }) => {
             baseUrl: config.apiUrl,
             // 실서버 시연은 만료가 가까우면 데모 계정으로 다시 로그인한 토큰을 준다.
             getToken: config.live ? accessToken : async () => session?.accessToken ?? null,
+            // 그래도 서버가 거절하면(다른 서버에서 받은 토큰 · 서버에서 지워진 세션) 한 번 더 로그인한다.
+            renewToken: config.live ? renew : undefined,
           }),
-    [session?.accessToken, accessToken],
+    [session?.accessToken, accessToken, renew],
   )
 
   return <ApiContext.Provider value={api}>{children}</ApiContext.Provider>

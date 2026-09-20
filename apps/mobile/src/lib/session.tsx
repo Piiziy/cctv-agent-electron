@@ -53,6 +53,11 @@ interface SessionContextValue {
    * 심사위원이 한 시간 뒤에 알림을 눌러도 화면이 401 로 비지 않게.
    */
   accessToken(): Promise<string | null>
+  /**
+   * 서버가 토큰을 거절했을 때(401) 데모 계정으로 다시 로그인한다 — 실서버 시연에서만 뜻이 있다.
+   * 만료 시각만 보고는 알 수 없는 토큰이 있다 (다른 서버에서 받았거나 서버에서 지워진 세션).
+   */
+  renew(): Promise<string | null>
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
@@ -135,9 +140,14 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     return (await renewLive())?.accessToken ?? null
   }, [renewLive])
 
+  const renew = useCallback(
+    async (): Promise<string | null> => (config.live ? ((await renewLive())?.accessToken ?? null) : null),
+    [renewLive],
+  )
+
   const value = useMemo(
-    () => ({ session, loading, auth, liveError, signIn, signOut, accessToken }),
-    [session, loading, auth, liveError, signIn, signOut, accessToken],
+    () => ({ session, loading, auth, liveError, signIn, signOut, accessToken, renew }),
+    [session, loading, auth, liveError, signIn, signOut, accessToken, renew],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }
