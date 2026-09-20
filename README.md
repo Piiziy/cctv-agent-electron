@@ -3,7 +3,8 @@
 무인매장 CCTV 이상행동 감시 서비스의 **클라이언트 모노레포**. npm workspaces + Turborepo.
 백엔드는 [scene-stealer-back](https://github.com/SceneStealer1/scene-stealer-back) 이다.
 
-## 지금 무엇을 하고 있나
+## 지금 무엇을 하고 있나 
+
 
 대회 제출용 **웹 데모**를 만들고 있다. 규정상 APK·exe 를 직접 내려받게 할 수 없고
 스토어 출시도 기간 안에 불가능해서, "핵심 기능을 웹에서 체험할 수 있는 데모" 를 URL 로 낸다.
